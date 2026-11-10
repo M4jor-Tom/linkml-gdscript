@@ -19,6 +19,13 @@ uv run ruff check && uv run ruff format --check
 
 Optionally `uvx pre-commit install` to run ruff on every commit.
 
+### With Nix
+
+`nix develop` gives a shell with uv, Python 3.14 and 3.11, ruff, pre-commit and
+Godot 4 (`godot4`). On NixOS it is the supported way to work: there, call `ruff`
+directly instead of `uv run ruff` (the ruff binary uv installs cannot run), and
+test another interpreter with `uv run --isolated --python 3.11 pytest`.
+
 ## Code conventions
 
 These follow [linkml/linkml](https://linkml.io/linkml/maintainers/contributing.html),

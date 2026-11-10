@@ -1,0 +1,121 @@
+# One schema exercising every construct listed in docs/MAPPING.md.
+id: https://example.org/kitchen-sink
+name: kitchen_sink
+prefixes:
+  linkml: https://w3id.org/linkml/
+  ks: https://example.org/kitchen-sink/
+default_prefix: ks
+default_range: string
+imports:
+  - linkml:types
+
+types:
+  Percentage:
+    typeof: float
+    description: A custom type narrowing a built-in one.
+    minimum_value: 0
+    maximum_value: 100
+
+enums:
+  LifeStatus:
+    description: Whether an entity is alive.
+    permissible_values:
+      ALIVE:
+        description: Still going.
+      DEAD:
+      in limbo:
+        description: A value that is not a valid identifier.
+
+classes:
+  HasAliases:
+    mixin: true
+    description: A mixin, GDScript has no multiple inheritance.
+    attributes:
+      aliases:
+        multivalued: true
+
+  NamedThing:
+    abstract: true
+    description: |-
+      Anything with an identity.
+      This description spans two lines.
+    attributes:
+      id:
+        identifier: true
+        range: uriorcurie
+      name:
+        required: true
+        pattern: "^\\S.*$"
+
+  Person:
+    is_a: NamedThing
+    mixins:
+      - HasAliases
+    attributes:
+      age:
+        description: An optional integer, which GDScript cannot make null.
+        range: integer
+        minimum_value: 0
+      height:
+        range: float
+      is_player:
+        range: boolean
+      birth_date:
+        range: date
+      last_seen:
+        range: datetime
+      balance:
+        range: decimal
+      luck:
+        range: Percentage
+      status:
+        range: LifeStatus
+      address:
+        description: An inlined object.
+        range: Address
+      best_friend:
+        description: A reference by identifier, not inlined.
+        range: Person
+      friends:
+        range: Person
+        multivalued: true
+      pets:
+        description: Inlined as a dictionary keyed by identifier.
+        range: Pet
+        multivalued: true
+        inlined: true
+      history:
+        range: Event
+        multivalued: true
+        inlined_as_list: true
+      lucky_charm:
+        description: A union, GDScript has no union types.
+        any_of:
+          - range: integer
+          - range: string
+
+  Pet:
+    is_a: NamedThing
+    attributes:
+      species:
+        ifabsent: string(dog)
+
+  Address:
+    attributes:
+      street:
+      city:
+        required: true
+
+  Event:
+    attributes:
+      label:
+      happened_at:
+        range: datetime
+
+  Dataset:
+    tree_root: true
+    attributes:
+      persons:
+        range: Person
+        multivalued: true
+        inlined_as_list: true

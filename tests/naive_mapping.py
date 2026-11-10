@@ -21,15 +21,15 @@ def class_slots(sv: SchemaView, cls: ClassDefinition) -> list[SlotDefinition]:
     return sv.class_induced_slots(cls.name)
 
 
-def field_name(sv: SchemaView, slot: SlotDefinition) -> str:
+def field_name(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
     return underscore(slot.name)
 
 
-def field_type(sv: SchemaView, slot: SlotDefinition) -> str:
+def field_type(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
     return "Variant"
 
 
-def field_default(sv: SchemaView, slot: SlotDefinition) -> str | None:
+def field_default(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str | None:
     return "[]" if slot.multivalued else None
 
 

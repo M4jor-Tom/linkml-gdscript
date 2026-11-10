@@ -19,8 +19,9 @@ from linkml_gdscript.generator import cli
 todo_mapping = pytest.mark.xfail(strict=True, raises=NotImplementedError, reason="TODO(mapping)")
 
 
-def all_slots(sv: SchemaView) -> list:
-    return [slot for cn in sv.all_classes() for slot in sv.class_induced_slots(cn)]
+def all_slots(sv: SchemaView) -> list[tuple]:
+    """Every (class, induced slot) pair of the schema."""
+    return [(cls, slot) for cn, cls in sv.all_classes().items() for slot in sv.class_induced_slots(cn)]
 
 
 @todo_mapping
@@ -44,18 +45,18 @@ def test_class_slots_are_induced_slots_of_the_class(sv):
 
 @todo_mapping
 def test_field_names_are_identifiers(sv):
-    assert all(mapping.field_name(sv, slot).isidentifier() for slot in all_slots(sv))
+    assert all(mapping.field_name(sv, cls, slot).isidentifier() for cls, slot in all_slots(sv))
 
 
 @todo_mapping
 def test_field_types_are_never_empty(sv):
-    assert all(mapping.field_type(sv, slot).strip() for slot in all_slots(sv))
+    assert all(mapping.field_type(sv, cls, slot).strip() for cls, slot in all_slots(sv))
 
 
 @todo_mapping
 def test_field_defaults_are_expressions_or_none(sv):
-    for slot in all_slots(sv):
-        default = mapping.field_default(sv, slot)
+    for cls, slot in all_slots(sv):
+        default = mapping.field_default(sv, cls, slot)
         assert default is None or default.strip()
 
 
@@ -78,9 +79,9 @@ def test_file_names_end_with_gd():
 
 
 @todo_mapping
-def test_cli_generates_the_kitchen_sink(tmp_path):
+def test_cli_generates_the_kitchen_sink(sv, tmp_path):
     result = CliRunner().invoke(cli, [str(KITCHEN_SINK), "-d", str(tmp_path)], catch_exceptions=False)
     assert result.exit_code == 0
-    assert len(list(tmp_path.glob("*.gd"))) == 8
+    assert len(list(tmp_path.glob("*.gd"))) == len(sv.all_classes()) + len(sv.all_enums())
     # TODO(mapping): parse-check each file with Godot once the output is real:
     #   godot --headless --check-only --script <file.gd>

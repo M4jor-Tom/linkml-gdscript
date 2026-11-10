@@ -18,6 +18,9 @@ about the schema (``sv.class_induced_slots``, ``sv.class_ancestors``,
 *induced* slots: inheritance, mixins and ``slot_usage`` are already resolved.
 
 Return values are raw GDScript source fragments, inserted verbatim by the templates.
+
+Need more than these functions (``@export`` hints, ``validate()`` bodies ...)? Add any
+function to this module and call it from a template as ``mapping.your_function(...)``.
 """
 
 from linkml_runtime.linkml_model.meta import ClassDefinition, EnumDefinition, PermissibleValue, SlotDefinition
@@ -52,16 +55,17 @@ def class_slots(sv: SchemaView, cls: ClassDefinition) -> list[SlotDefinition]:
     raise NotImplementedError("TODO(mapping): class_slots")
 
 
-def field_name(sv: SchemaView, slot: SlotDefinition) -> str:
+def field_name(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
     """Return the GDScript variable name for a slot.
 
     To decide: casing, use of ``slot.alias``, collisions with reserved words
-    and with members of the base class (``name``, ``script`` ...).
+    and with members of the base class (``name``, ``script`` ...). ``cls`` is the
+    class the field is being declared in.
     """
     raise NotImplementedError("TODO(mapping): field_name")
 
 
-def field_type(sv: SchemaView, slot: SlotDefinition) -> str:
+def field_type(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
     """Return the GDScript type hint for a slot, e.g. ``int`` or ``Array[Person]``.
 
     This is the heart of the mapping. To decide, at least:
@@ -78,7 +82,7 @@ def field_type(sv: SchemaView, slot: SlotDefinition) -> str:
     raise NotImplementedError("TODO(mapping): field_type")
 
 
-def field_default(sv: SchemaView, slot: SlotDefinition) -> str | None:
+def field_default(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str | None:
     """Return the GDScript initialiser expression for a slot, or ``None`` for no initialiser.
 
     To decide: honouring ``ifabsent``, defaults for collections and for object-valued fields.

@@ -1,107 +1,166 @@
 # LinkML → GDScript mapping
 
-**Status: nothing decided, nothing implemented.** This document is the worklist
-for the person designing the mapping. You do not need to know the Python
-packaging, the CLI or the LinkML generator framework: all of that is done.
+## Contract
 
-## Workflow
+Generate **structural data classes for Godot 4.5+**, not a LinkML runtime.
+The classes extend `RefCounted`, not `Resource` or `Node`. One script is emitted
+per class and static enum. There are no extra runtime dependencies.
 
-1. Decide a row of the tables below and write the decision down here.
-2. Implement it in `src/linkml_gdscript/mapping.py` (one small function per
-   topic, each documented) or in `src/linkml_gdscript/templates/*.gd.jinja`.
-3. Remove the `@todo_mapping` marker of the matching test in
-   `tests/test_mapping.py`, and add tests for the decision you made, using
-   `tests/input/kitchen_sink.yaml` (it contains one example of every row below).
-4. Run `uv run pytest`.
+Validation, JSON/YAML loading and saving, Inspector integration, and reference
+resolution belong to the caller. Keep the source schema for semantic validation.
+A generated object is not automatically a valid LinkML instance.
 
-`rg 'TODO\(mapping\)'` lists every open point in the code. To try the generator:
-
-```shell
-uv run gen-gdscript tests/input/kitchen_sink.yaml -d /tmp/out
-```
-
-Two things to settle before anything else, because most rows depend on them:
-
-- **TODO(mapping): minimum Godot version.** Typed `Dictionary[K, V]` needs 4.4, `@abstract` needs 4.5.
-- **TODO(mapping): what the generated classes are for.** Editable `Resource`s
-  with `@export`, plain `RefCounted` data objects, or something else.
+The following decisions are approved; implementation and verification are tracked
+in `docs/superpowers/plans/2026-11-12-mapping.md`.
 
 ## Naming
 
-| LinkML | GDScript | Where | Status |
-|---|---|---|---|
-| class name | | `mapping.class_name` | TODO |
-| slot name / `alias` | | `mapping.field_name` | TODO |
-| enum name | | `mapping.enum_name` | TODO |
-| permissible value (may not be an identifier: `in limbo`) | | `mapping.enum_member_name` | TODO |
-| output file name | | `mapping.file_name` | TODO |
-| collision with a reserved word or a Godot built-in (`Node`, `name` ...) | | all of the above | TODO |
+- Generated global types use `LinkML` plus PascalCase; fields use `slot_` plus
+  snake_case; enum constants use `VALUE_` plus UPPER_SNAKE_CASE. Fixed prefixes
+  avoid native Godot class/member/keyword collisions without depending on a
+  running Godot installation or a maintained built-in blacklist.
+- Slot `alias` takes precedence over the original slot name.
+- Names are normalized to ASCII identifiers. Punctuation separates words;
+  leading digits are safe behind the prefixes. Names with no usable characters
+  are rejected rather than silently assigned a meaningless identifier.
+- Output filenames are snake_case with `.gd`.
+- Reject collisions after normalization: class and enum names share a namespace;
+  filenames are compared case-insensitively; fields include inherited fields;
+  enum constants are checked within their host. Name both conflicting elements.
+- Collisions with arbitrary user-defined global types, or with independently
+  generated schemas, are the integrating project's responsibility.
 
 ## Classes
 
-| LinkML | GDScript | Where | Status |
-|---|---|---|---|
-| class without `is_a` | `extends` what? | `mapping.base_class` | TODO |
-| `is_a` | | `mapping.base_class` | TODO |
-| `mixins` (no multiple inheritance in GDScript) | | `mapping.class_slots` | TODO |
-| inherited slots: redeclare or rely on `extends`? | | `mapping.class_slots` | TODO |
-| `abstract: true` | | `class.gd.jinja` | TODO |
-| `tree_root: true` | | `class.gd.jinja` | TODO |
-| `description` | `##` doc comment (skeleton does this) | `class.gd.jinja` | TODO: confirm |
+| LinkML | GDScript |
+|---|---|
+| no `is_a` | `extends RefCounted` |
+| `is_a` | Extend the corresponding generated class |
+| `mixins` | Flatten effective mixin slots, without multiple inheritance |
+| inherited slots | Rely on `extends`; do not redeclare fields |
+| `abstract: true` | Native `@abstract` annotation (Godot 4.5+) |
+| `tree_root: true` | Schema metadata, no different Godot base class |
+| `description` | Documentation comments, with literal BBCode escaped |
 
-## Slot types
+Use induced slots from `SchemaView` so mixins and `slot_usage` are resolved.
+Before suppressing inherited declarations, compare their effective field names,
+value/storage representations and initializers. Reject changed inherited aliases,
+initializers or incompatible storage shapes with a class/slot-specific error.
+Compatible constraint-only refinements remain external validation concerns;
+the source schema is authoritative for them. A mixin does not create Godot
+subtype identity. Reject cycles and inheritance that cannot be represented,
+including missing parents or cycles introduced by effective `slot_usage` ancestry.
 
-All in `mapping.field_type` (type hint) and `mapping.field_default` (initialiser).
+## Values and cardinality
 
-| LinkML | GDScript | Status |
-|---|---|---|
-| `string` | | TODO |
-| `integer` | | TODO |
-| `float`, `double` | | TODO |
-| `decimal` (no native decimal) | | TODO |
-| `boolean` | | TODO |
-| `date`, `datetime`, `time` (no native types) | | TODO |
-| `uri`, `uriorcurie`, `curie`, `ncname` | | TODO |
-| custom `types` (`typeof`) | | TODO |
-| enum range | | TODO |
-| class range, inlined | | TODO |
-| class range, reference by identifier | | TODO |
-| `any_of` / unions (no union types) | | TODO |
-| no range (`default_range`) | | TODO |
+| LinkML value | GDScript representation |
+|---|---|
+| `string` | `String` value |
+| `integer` | `int` value (signed 64-bit) |
+| `boolean` | `bool` value |
+| `float`, `double` | `float` value |
+| `decimal` | Exact lexical `String`, not binary floating point |
+| `date`, `datetime`, `time`, `date_or_datetime` | Lexical `String` |
+| URI/CURIE, NCName, identifier and path types | Lexical `String` |
+| custom `types` | Resolve `typeof` to its primitive representation |
+| static enum | Original permissible-value `String` |
+| inlined class | Generated object type |
+| non-inlined class | Identifier's value representation, not an object lookup |
+| `any_of`, `exactly_one_of` | `Variant`; range alternatives are externally validated |
+| omitted range | Induced `default_range` |
 
-## Cardinality
+All scalar **value** declarations use `Variant`, including required values and
+fields with defaults. Without an explicit default they use `Variant = null`;
+this allows absent values to stay distinct from `0`, `false` and `""`. Explicit
+literal defaults initialize that same Variant declaration with the represented
+value. This deliberately gives up scalar static typing. Object-valued fields
+keep nullable object type hints. `required` does not invent a default.
 
-| LinkML | GDScript | Status |
-|---|---|---|
-| optional scalar (`int`, `float`, `bool` cannot be `null`) | | TODO |
-| `required: true` | | TODO |
-| `multivalued: true` | | TODO |
-| `multivalued` + `inlined: true` (dict keyed by identifier) | | TODO |
-| `multivalued` + `inlined_as_list: true` | | TODO |
-| `ifabsent` (default value) | | TODO |
+Multivalued fields use `Array[T] = []`, with the primitive/object representation
+as `T`. Inlined multivalued classes with an identifier or key use
+`Dictionary[K, T] = {}` unless `inlined_as_list` is true. Unkeyed inline classes
+use arrays. Empty collection defaults intentionally collapse absent and empty.
+Nested typed collections are not emitted (GDScript does not support them).
+Range unions (`any_of`, `exactly_one_of`) use Variant elements; reject ambiguous
+keyed-union storage rather than inventing keys or converting references silently.
+Slot `union_of` references other slots, not range types, and is explicitly rejected
+as unsupported slot composition. `all_of` and `none_of` remain external constraints
+on the existing effective range, preserving enclosing union storage under compatible
+constraints: their references are checked, and branches that change storage
+representation are rejected. `range_expression`, inline `enum_range` and `array`
+expressions are explicitly unsupported structural shapes.
+
+Use `SchemaView.is_inlined(slot)` for effective inlining. In the installed
+LinkML runtime, an ordinary external reference requires an **identifier**;
+a key alone does not make it a reference. Use
+`get_identifier_slot(range, use_key=True)` when choosing inline dictionary keys.
+
+Unknown/cyclic types, unsupported collection shapes, non-representable defaults
+and unresolved schema references are generation-time errors, never silent
+fallbacks. Godot's integer range and floating-point precision remain limitations
+for values supplied by callers; no decimal arithmetic or JSON-number round-trip
+compatibility is promised.
+
+## Defaults
+
+Support literal `ifabsent` forms for scalar primitives and their custom-type
+aliases, including `string(dog)`, integers, finite floats, booleans, lexical
+strings and exact decimal strings. Quote strings safely for GDScript, preserve
+Unicode and escapes, and check compatibility with the slot's representation,
+descending through nested range unions to their leaf value representations.
+Reject nonliteral expressions, incompatible defaults, out-of-range integer
+literals and collection/object defaults that cannot be represented faithfully.
+Do not evaluate Python or GDScript code from a schema.
+
+Only explicit `type(raw payload)` literals are supported. Outer-quoted payloads
+such as `string("dog")` or `integer('7')` are rejected, not emitted with their
+quote delimiters as data. Payloads beginning with a quote (after whitespace)
+are rejected as unsupported quoted syntax; quotes inside a raw payload such as
+`string(é "hi")` remain literal characters. Symbolic payload names `default_range`,
+`class_uri`, `slot_uri`, `class_curie`, `slot_curie`, `bnode` and `default_ns` are
+reserved and rejected across default types, rather than incorrectly emitted as
+literal text. No LinkML default-expression evaluator is generated.
 
 ## Enums
 
-| LinkML | GDScript | Where | Status |
-|---|---|---|---|
-| enum definition (needs a host script) | skeleton: one script per enum, inner `enum Value` | `enum.gd.jinja` | TODO: confirm or change |
-| string value of a permissible value (GDScript enums are ints) | | `enum.gd.jinja` | TODO |
-| `meaning`, dynamic enums (`reachable_from` ...) | | | TODO |
+Each static enum gets a `RefCounted` host with named string constants, for example
+`LinkMLLifeStatus.VALUE_IN_LIMBO == "in limbo"`. There is no integer conversion
+layer and no claim that these constants enforce membership at assignment time.
+Descriptions are emitted as documentation. `meaning` and other semantic metadata
+remain in the schema. Reject unresolved dynamic enums (`reachable_from`, code
+sets, queries or compositional enum definitions), rather than emitting an
+apparently complete but truncated set of values. This includes `is_a`, `mixins`,
+`inherits`, `values_from`, `include`, `minus`, `matches`, `concepts`, `pv_formula`
+and code-set metadata; external enumeration resolution is not performed.
 
-## Constraints and behaviour
+## External behavior (deliberately not generated)
 
-All in the templates.
+| LinkML concern | Policy |
+|---|---|
+| `required`, pattern, min/max, cardinality constraints | Validate against the source schema outside Godot |
+| `identifier`, `key` | Select storage/reference shapes; uniqueness remains external |
+| `rules`, `unique_keys` | External validation |
+| `slot_usage` | Apply induced storage mapping; constraints stay external |
+| `annotations`, semantic metadata | Retained in source schema, no generated behavior |
+| JSON/YAML loading and saving | No `from_dict`, `to_dict` or custom codec |
+| Inspector annotations/hints | No `@export` or editor behavior |
 
-| LinkML | GDScript | Status |
-|---|---|---|
-| `pattern`, `minimum_value`, `maximum_value`, `required` | generated `validate()`? ignored? | TODO |
-| `identifier`, `key` | | TODO |
-| loading / saving LinkML-conformant JSON or YAML | `from_dict` / `to_dict`? | TODO |
-| `@export` and inspector hints | | TODO |
-| `rules`, `unique_keys`, `slot_usage` refinements, `annotations` | | TODO |
+## Implementation boundaries and verification
 
-## If the plumbing is in your way
+Language/domain logic stays in `mapping.py` and `templates/`; keep the generator's
+load/render/write plumbing unchanged. Template-shape tests and the test-only
+naive mapping may change to match the new template contract.
 
-If a decision cannot be expressed through the existing functions and template
-variables (for example several classes per file, or all enums in one script),
-that is a plumbing change: open an issue rather than working around it.
+Use `nix develop --command uv run pytest` and Nix's `ruff` directly. Tests must
+exercise naming failures, null/default semantics, custom types, reference versus
+inline/list/dict shapes, inheritance/refinement failures and static/dynamic enums.
+A headless Godot project must register generated global classes, parse the scripts
+and run representative assignments/default checks, not just grep generated text.
+Godot 4.7.2 passed the headless import and runtime tests locally; this is not
+proof of testing Godot 4.5. CI runs Python 3.10/3.14 tests separately from a
+Nix-provisioned Godot job. Missing Godot fails the integration test.
+
+The templates additionally call `mapping.string_literal(text)` for safe source
+literals and `mapping.escape_description(text)` before the existing `doc_comment`
+filter. The test-only naive mapper deliberately reuses these two helpers; the
+nine public mapping entry points and generator contexts remain unchanged.

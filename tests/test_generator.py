@@ -44,8 +44,9 @@ def test_descriptions_become_doc_comments(files):
 def test_enum_file_lists_members(files):
     status = files["LifeStatus.gd"]
     assert "class_name LifeStatus\n" in status
-    assert "\t## Still going.\n\tALIVE,\n\tDEAD,\n" in status
-    assert "\tIN_LIMBO,\n" in status
+    assert '## Still going.\nconst ALIVE: String = "ALIVE"\n' in status
+    assert 'const DEAD: String = "DEAD"\n' in status
+    assert 'const IN_LIMBO: String = "in limbo"\n' in status
 
 
 def test_no_template_syntax_leaks_into_output(files):

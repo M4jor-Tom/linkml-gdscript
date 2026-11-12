@@ -1,40 +1,53 @@
 # linkml-gdscript
 
-Generate GDScript (Godot 4) classes from [LinkML](https://linkml.io) schemas.
+Generate structural GDScript data classes for **Godot 4.5+** from
+[LinkML](https://linkml.io) schemas. Generated scripts extend `RefCounted` and
+have no extra runtime dependencies.
 
-> **Status: scaffold.** The tooling works; the LinkML → GDScript mapping itself is
-> deliberately **not implemented yet**. Running `gen-gdscript` today fails with
-> `NotImplementedError: TODO(mapping): ...`. See [docs/MAPPING.md](docs/MAPPING.md).
-
-## Usage (once the mapping exists)
+## Usage
 
 ```shell
-uv tool install git+https://github.com/M4jor-Tom/linkml-gdscript   # or: pip install
+uv tool install git+https://github.com/M4jor-Tom/linkml-gdscript
 gen-gdscript my_schema.yaml -d path/to/godot_project/generated/
 ```
 
-One `.gd` file is written per LinkML class and enum. The generator runs outside
-Godot; the generated files have no dependency on it, so they work in any project.
+One `.gd` file is written per class and static enum. For example, `Person`
+becomes `LinkMLPerson` in `link_ml_person.gd`, slot `age` becomes `slot_age`,
+and enum value `in limbo` becomes `VALUE_IN_LIMBO` with its original string value:
 
-## Layout
+```gdscript
+var person = LinkMLPerson.new()
+assert(person.slot_age == null)
+person.slot_age = 0
+person.slot_status = LinkMLLifeStatus.VALUE_IN_LIMBO
+```
 
-| Path | What | Who edits it |
-|---|---|---|
-| `src/linkml_gdscript/mapping.py` | Every LinkML → GDScript decision, as small functions | **GDScript / domain expert** |
-| `src/linkml_gdscript/templates/` | Shape of the generated `.gd` files | **GDScript / domain expert** |
-| `docs/MAPPING.md` | The decision table and the open questions | **GDScript / domain expert** |
-| `tests/test_mapping.py` | Contract tests, `xfail` until each function is implemented | **GDScript / domain expert** |
-| `src/linkml_gdscript/generator.py` | Schema loading, CLI, rendering, file writing | plumbing, done |
-| `tests/test_generator.py`, `tests/naive_mapping.py` | Plumbing tests | plumbing, done |
+Scalar values use `Variant` so absence remains distinct from zero, false and
+empty strings. Objects keep nullable class hints; collections use typed arrays
+or dictionaries. Decimal values preserve their exact lexical strings. Inheritance,
+mixin fields, static enums and literal defaults are supported; incompatible
+inherited storage, naming collisions and unsupported shapes fail generation.
+
+This is **not a LinkML runtime**: validation, reference resolution, JSON/YAML
+loading and saving, and Inspector integration remain the caller's responsibility.
+Keep the source schema for validation. See [the mapping contract](docs/MAPPING.md)
+for supported representations, explicit rejections and external metadata policies.
 
 ## Development
 
 ```shell
-uv sync
-uv run pytest
-uv run ruff check && uv run ruff format --check
+nix develop --command uv run pytest
+nix develop --command ruff check
+nix develop --command ruff format --check
 ```
 
+The suite includes a real headless Godot import and runtime check (verified
+locally on Godot 4.7.2, not 4.5). Python-only tests can run with
+`uv run pytest --ignore=tests/test_godot.py`; the engine test fails if Godot is
+missing rather than silently skipping acceptance.
+
+Mapping logic lives in `src/linkml_gdscript/mapping.py` and `templates/`;
+`generator.py` handles loading, rendering, the CLI and file writing.
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

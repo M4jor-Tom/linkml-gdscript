@@ -8,6 +8,9 @@ from linkml_runtime.linkml_model.meta import ClassDefinition, EnumDefinition, Pe
 from linkml_runtime.utils.formatutils import camelcase, underscore
 from linkml_runtime.utils.schemaview import SchemaView
 
+# Templates share literal/comment escaping; the deliberately naive mapping stays independent.
+from linkml_gdscript.mapping import escape_description, string_literal  # noqa: F401
+
 
 def class_name(sv: SchemaView, cls: ClassDefinition) -> str:
     return camelcase(cls.name)

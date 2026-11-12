@@ -4,16 +4,18 @@ By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Implementing the mapping
 
-This is the main open work. Start with [docs/MAPPING.md](docs/MAPPING.md); it
-explains the workflow and you should not need to touch anything outside
-`mapping.py`, `templates/`, `docs/MAPPING.md` and `tests/test_mapping.py`.
-`rg 'TODO\(mapping\)'` lists what is left.
+Start with [docs/MAPPING.md](docs/MAPPING.md), the structural projection contract.
+Keep domain logic in `mapping.py` and `templates/`, not the generator plumbing.
+Add failing regression tests in `tests/test_mapping.py` before changing a mapping;
+use `tests/test_godot.py` to verify that generated scripts parse and run.
+The templates also use `string_literal` and `escape_description` helpers, shared
+explicitly with the test-only naive mapper.
 
 ## Setup
 
 ```shell
 uv sync
-uv run pytest
+uv run pytest --ignore=tests/test_godot.py
 uv run ruff check && uv run ruff format --check
 ```
 
@@ -25,6 +27,19 @@ Optionally `uvx pre-commit install` to run ruff on every commit.
 Godot 4 (`godot4`). On NixOS it is the supported way to work: there, call `ruff`
 directly instead of `uv run ruff` (the ruff binary uv installs cannot run), and
 test another interpreter with `uv run --isolated --python 3.11 pytest`.
+
+Run the complete acceptance gates (including Godot) with:
+
+```shell
+nix develop --command uv run pytest
+nix develop --command ruff check
+nix develop --command ruff format --check
+```
+
+The engine test creates a temporary project, registers generated global classes,
+checks diagnostics, and executes runtime assertions with a success sentinel.
+It requires `godot4` and never skips a missing engine. CI covers Python 3.10/3.14
+separately from the Nix-provisioned Godot job.
 
 ## Code conventions
 
@@ -39,8 +54,8 @@ so the generator can be proposed upstream later without rework:
 
 ## Git conventions
 
-- Gitflow: branch `feature/*` or `fix/*` from `develop`; `main` only receives releases
-- merge with `--no-ff`, never fast-forward
+- Work and commit directly on `master`; this is a single-developer repository.
+- Do not create development branches or worktrees unless explicitly requested.
 - [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, `ci:` ...
 
 ## Use of AI

@@ -86,9 +86,13 @@ Generation failures stop before opening the browser.
 
 ### Golden output
 
-Committed examples live in `tests/golden/<input-name>/*.gd`. Every top-level
-`tests/input/*.yaml` or `*.yml` schema is discovered automatically; use distinct
-filename stems. From the repository root:
+Committed examples live in `tests/golden/<input-name>/`: generated `.gd` files
+and a `README.md` with one whole-schema Mermaid ER diagram. GitHub renders the
+Markdown diagram directly; see the [kitchen-sink diagram](tests/golden/kitchen_sink/README.md).
+Like `view-schema`, it includes disconnected classes, not only those reachable
+from a `tree_root`. It depicts the LinkML schema, not GDScript storage details.
+Every top-level `tests/input/*.yaml` or `*.yml` schema is discovered automatically;
+use distinct filename stems. From the repository root:
 
 ```shell
 nix develop --command golden                   # Read-only comparison
@@ -96,9 +100,10 @@ nix develop --command golden --update-goldens  # Accept intentional generation c
 ```
 
 Checks generate into temporary directories and compare exact bytes and the complete
-`.gd` file set, including missing, extra and retired-fixture files. Updates replace
-expectations and retire obsolete `.gd` files only after every input generates
-successfully. Goldens contain source only, without ownership manifests or Godot caches.
+`.gd` and `.md` file set, including missing, extra and retired-fixture files.
+Updates replace expectations and retire obsolete generated source/Markdown files
+only after every input and diagram generates successfully. This directory is
+reserved for generated expectations, without ownership manifests or Godot caches.
 
 After an intentional change, regenerate, review `git diff -- tests/golden/`, and
 commit the expectations together with the input or generator change. For newly

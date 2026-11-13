@@ -32,7 +32,10 @@ def main() -> None:
     parser.add_argument("schema", type=Path)
     schema = parser.parse_args().schema
     result = subprocess.run(
-        ["gen-erdiagram", "--format", "mermaid", str(schema)], check=True, stdout=subprocess.PIPE, text=True
+        ["gen-erdiagram", "--no-structural", "--format", "mermaid", str(schema)],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
     )
     with TemporaryDirectory(prefix="linkml-view-schema-") as directory:
         page = Path(directory) / "schema.html"

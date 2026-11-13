@@ -23,7 +23,10 @@ jobs:
 
   godot:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shell: [default, godot-floor]
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
-      - run: nix develop --command uv run pytest tests/test_godot.py -s
+      - run: nix develop .#${{ matrix.shell }} --command uv run pytest tests/test_godot.py -s

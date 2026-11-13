@@ -16,9 +16,26 @@
         "type": "github"
       }
     },
+    "nixpkgs-godot-floor": {
+      "locked": {
+        "lastModified": 1758048806,
+        "narHash": "sha256-PJBuO6xHLVOCdcr6OdKqY1e266kJFqtMqxJ4cD6dFr4=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "966d5ad75a4e79dc81edae64933f4900dca3a537",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "966d5ad75a4e79dc81edae64933f4900dca3a537",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "nixpkgs-godot-floor": "nixpkgs-godot-floor"
       }
     }
   },

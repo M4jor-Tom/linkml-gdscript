@@ -39,7 +39,13 @@ nix develop --command ruff format --check
 The engine test creates a temporary project, registers generated global classes,
 checks diagnostics, and executes runtime assertions with a success sentinel.
 It requires `godot4` and never skips a missing engine. CI covers Python 3.10/3.14
-separately from the Nix-provisioned Godot job.
+separately from the Nix-provisioned Godot job. Qualify both the current engine and
+the advertised Godot 4.5 floor with:
+
+```shell
+nix develop --command uv run pytest tests/test_godot.py -s
+nix develop .#godot-floor --command uv run pytest tests/test_godot.py -s
+```
 
 ## Code conventions
 

@@ -41,8 +41,8 @@ nix develop --command ruff check
 nix develop --command ruff format --check
 ```
 
-The suite includes a real headless Godot import and runtime check (verified
-locally on Godot 4.7.2, not 4.5). Python-only tests can run with
+The suite includes a real headless Godot import and runtime check, verified
+locally on Godot 4.7.2 and the advertised 4.5 floor. Python-only tests can run with
 `uv run pytest --ignore=tests/test_godot.py`; the engine test fails if Godot is
 missing rather than silently skipping acceptance.
 

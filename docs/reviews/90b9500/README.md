@@ -22,7 +22,7 @@ to expand the supported subset.
 | R04 | [Unicode-only enum values](naming-and-inheritance.md#r04--unicode-only-enum-values-stop-generation) | Compatibility limit | open | — | Verify deliberate rejection and record the naming-policy disposition. |
 | R05 | [Inherited alias changes](naming-and-inheritance.md#r05--subclasses-cannot-rename-inherited-storage) | Compatibility limit | open | — | Verify the existing storage contract and record its disposition. |
 | R06 | [Obsolete output survives regeneration](regeneration-safety.md#r06--stale-scripts-can-break-a-previously-working-project) | P2 integration defect | open | — | Select a safe generated-file ownership policy. |
-| R07 | [Minimum Godot version is unverified](engine-coverage.md#r07--testing-472-does-not-establish-45-support) | P2 evidence gap | open | — | Test the declared minimum or obtain approval to change the support claim. |
+| R07 | [Minimum Godot version is unverified](engine-coverage.md#r07--testing-472-does-not-establish-45-support) | P2 evidence gap | in-progress | Task 1 implementation | Added pinned `godot-floor` shell and version gate; `nix develop --command uv run pytest tests/test_godot.py -s` passed on `4.7.2.stable.nixpkgs.ed1daf0bf`, and `nix develop .#godot-floor --command uv run pytest tests/test_godot.py -s` passed on `4.5.stable.nixpkgs.876b29033` (both `MAPPING_RUNTIME_OK`; floor emits external Fontconfig warnings). Full suite: 169 passed; `nix develop --command ruff check`, `ruff format --check`, and `git diff --check` passed. Fresh floor rerun required after Tasks 2–7. Commit recorded in Task 1 report. |
 
 Read [output-contract.md](output-contract.md) before changing behavior. It contains
 scope guardrails and LinkML guidance, **not another feature backlog**. Suggested

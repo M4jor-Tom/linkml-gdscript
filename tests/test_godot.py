@@ -1,11 +1,13 @@
 """Parse and execute generated classes in the real Nix-provided Godot engine."""
 
+import os
 import re
 import shutil
 import subprocess
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
 from linkml_runtime.linkml_model.meta import ClassDefinition, EnumDefinition
 from linkml_runtime.utils.schemaview import SchemaView
 
@@ -27,10 +29,21 @@ def run_godot(engine: str, project: Path, *arguments: str) -> str:
     return output
 
 
-def test_generated_scripts_run_in_godot(sv: SchemaView, tmp_path: Path) -> None:
+@pytest.fixture
+def engine(tmp_path: Path) -> str:
+    """Require the selected shell's engine and record its exact version."""
+    executable = shutil.which("godot4")
+    assert executable is not None, "Godot is required; use the documented Nix shell"
+    version = run_godot(executable, tmp_path, "--version").strip()
+    expected = os.environ.get("GODOT_EXPECTED_VERSION")
+    if expected is not None:
+        assert version.startswith(expected + "."), (expected, version)
+    print(f"GODOT_VERSION={version}")
+    return executable
+
+
+def test_generated_scripts_run_in_godot(sv: SchemaView, tmp_path: Path, engine: str) -> None:
     """Register global classes, then exercise nullable values, defaults and containers."""
-    engine = shutil.which("godot4")
-    assert engine is not None, "Godot is required: run nix develop --command uv run pytest tests/test_godot.py"
     schema = deepcopy(sv.schema)
     schema.classes["LiteralValues"] = ClassDefinition(
         name="LiteralValues",

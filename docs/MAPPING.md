@@ -156,9 +156,9 @@ exercise naming failures, null/default semantics, custom types, reference versus
 inline/list/dict shapes, inheritance/refinement failures and static/dynamic enums.
 A headless Godot project must register generated global classes, parse the scripts
 and run representative assignments/default checks, not just grep generated text.
-Godot 4.7.2 passed the headless import and runtime tests locally; this is not
-proof of testing Godot 4.5. CI runs Python 3.10/3.14 tests separately from a
-Nix-provisioned Godot job. Missing Godot fails the integration test.
+Godot 4.7.2 and 4.5 passed the headless import and runtime tests locally. CI
+runs Python 3.10/3.14 tests separately from Nix-provisioned Godot 4.7.2 and 4.5
+jobs. Missing Godot fails the integration test.
 
 The templates additionally call `mapping.string_literal(text)` for safe source
 literals and `mapping.escape_description(text)` before the existing `doc_comment`

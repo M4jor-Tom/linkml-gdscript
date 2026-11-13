@@ -30,6 +30,10 @@
               (pkgs.writeShellScriptBin "golden" ''
                 exec ${pkgs.uv}/bin/uv run pytest tests/test_golden.py "$@"
               '')
+              pkgs.surf
+              (pkgs.writeShellScriptBin "view-schema" ''
+                exec ${pkgs.uv}/bin/uv run python -m linkml_gdscript.viewer "$@"
+              '')
               engine
             ];
             # PyOxigraph's PyPI wheel needs the C++ runtime at import time.

@@ -70,6 +70,20 @@ locally on Godot 4.7.2 and the advertised 4.5 floor. Python-only tests can run w
 `uv run pytest --ignore=tests/test_godot.py`; the engine test fails if Godot is
 missing rather than silently skipping acceptance.
 
+### View a schema
+
+From the repository root, generate a diagram and open it in the Nix-provided
+Surf browser:
+
+```shell
+nix develop --command view-schema tests/input/kitchen_sink.yaml
+```
+
+This opens a temporary local `file://` HTML page, not a server or your default
+browser. Internet access is required to load the pinned Mermaid renderer from
+jsDelivr. The command waits for Surf to close, then deletes the temporary page.
+Generation failures stop before opening the browser.
+
 ### Golden output
 
 Committed examples live in `tests/golden/<input-name>/*.gd`. Every top-level

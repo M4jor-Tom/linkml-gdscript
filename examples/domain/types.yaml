@@ -1,0 +1,37 @@
+id: https://example.org/domain/types
+name: domain_types
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports: [linkml:types]
+enums:
+  Quality:
+    permissible_values:
+      standard: {}
+      Ω: {}
+classes:
+  Entry:
+    attributes:
+      id: {range: string, identifier: true}
+      category:
+        any_of: [{range: string}, {range: integer}]
+  Item:
+    is_a: Entry
+    slot_usage:
+      category:
+        alias: kind
+        any_of: [{range: string}]
+    attributes:
+      quality: {range: Quality}
+      labels:
+        any_of:
+          - {range: string}
+          - {range: string, multivalued: true}
+      metadata: {range: Metadata, inlined: true}
+  Metadata:
+    attributes:
+      title: {range: string}
+    extra_slots:
+      range_expression:
+        any_of:
+          - {range: string}
+          - {range: integer, multivalued: true}

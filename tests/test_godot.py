@@ -8,10 +8,11 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from click.testing import CliRunner
 from linkml_runtime.linkml_model.meta import ClassDefinition, EnumDefinition
 from linkml_runtime.utils.schemaview import SchemaView
 
-from linkml_gdscript.generator import GDScriptGenerator
+from linkml_gdscript.generator import GDScriptGenerator, cli
 
 
 def run_godot(engine: str, project: Path, *arguments: str) -> str:
@@ -203,6 +204,38 @@ func _initialize() -> void:
     )
     output = run_godot(engine, tmp_path, "--script", "check.gd")
     assert "MAPPING_RUNTIME_OK" in output, output
+    print(output)
+
+
+def test_domain_example_runs_in_godot(tmp_path: Path, engine: str) -> None:
+    """Compile every generated script and run the documented application boundary."""
+    root = Path(__file__).parents[1] / "examples" / "domain"
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "project.godot").write_text(
+        'config_version=5\n[application]\nconfig/name="Domain example"\n', encoding="utf-8"
+    )
+    generated = project / "generated"
+    result = CliRunner().invoke(cli, [str(root / "domain.yaml"), "-d", str(generated)])
+    assert result.exit_code == 0, result.output
+    assert {path.name: path.read_text(encoding="utf-8") for path in generated.glob("*.gd")} == GDScriptGenerator(
+        root / "domain.yaml"
+    ).render()
+    shutil.copy(root / "usage.gd", project / "usage.gd")
+    load_script = project / "load_generated.gd"
+    paths = [f"res://generated/{path.name}" for path in sorted(generated.glob("*.gd"))]
+    load_script.write_text(
+        "extends SceneTree\nfunc _initialize() -> void:\n"
+        + "".join(f'    assert(load("{path}") != null)\n' for path in paths)
+        + '    print("DOMAIN_SCRIPTS_COMPILE_OK")\n    quit()\n',
+        encoding="utf-8",
+    )
+    print(run_godot(engine, project, "--editor", "--quit"))
+    compile_output = run_godot(engine, project, "--script", "load_generated.gd")
+    assert "DOMAIN_SCRIPTS_COMPILE_OK" in compile_output, compile_output
+    print(compile_output)
+    output = run_godot(engine, project, "--script", "usage.gd")
+    assert "DOMAIN_MODEL_OK" in output, output
     print(output)
 
 

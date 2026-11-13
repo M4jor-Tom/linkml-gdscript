@@ -1,0 +1,9 @@
+id: https://example.org/domain
+name: domain
+imports: [types]
+classes:
+  Catalog:
+    tree_root: true
+    attributes:
+      items: {range: Item, multivalued: true, inlined: true}
+      featured: {range: Item}

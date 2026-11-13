@@ -10,8 +10,8 @@ Validation, JSON/YAML loading and saving, Inspector integration, and reference
 resolution belong to the caller. Keep the source schema for semantic validation.
 A generated object is not automatically a valid LinkML instance.
 
-The following decisions are approved; implementation and verification are tracked
-in `docs/superpowers/plans/2026-11-12-mapping.md`.
+The following decisions define the supported structural projection and its
+explicit limits; the source schema remains authoritative for validation.
 
 ## Naming
 

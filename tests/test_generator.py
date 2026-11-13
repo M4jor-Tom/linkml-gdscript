@@ -145,6 +145,21 @@ def test_cli_help():
     assert "--output-directory" in result.output
 
 
+def test_cli_generates_domain_import_closure(tmp_path: Path) -> None:
+    """The real CLI generates the modular example from its single entry schema."""
+    root = Path(__file__).parents[1] / "examples" / "domain" / "domain.yaml"
+    generated = tmp_path / "generated"
+    result = CliRunner().invoke(cli, [str(root), "-d", str(generated)])
+    assert result.exit_code == 0, result.output
+    files = GDScriptGenerator(root).render()
+    assert {path.name: path.read_text(encoding="utf-8") for path in generated.glob("*.gd")} == files
+    assert "var slot_items: Dictionary[String, LinkMLItem] = {}" in files["link_ml_catalog.gd"]
+    assert "var slot_featured: Variant = null" in files["link_ml_catalog.gd"]
+    assert "var slot_labels: Variant = null" in files["link_ml_item.gd"]
+    assert "var linkml_extra_slots: Dictionary[String, Variant] = {}" in files["link_ml_metadata.gd"]
+    assert "var slot_kind: Variant:" in files["link_ml_item.gd"]
+
+
 def test_cli_imported_union_without_entry_default_range(tmp_path):
     """Imported alternatives generate Variant before creating output on failure."""
     choices = tmp_path / "choices.yaml"

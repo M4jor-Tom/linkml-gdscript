@@ -32,6 +32,8 @@ This is **not a LinkML runtime**: validation, reference resolution, JSON/YAML
 loading and saving, and Inspector integration remain the caller's responsibility.
 Keep the source schema for validation. See [the mapping contract](docs/MAPPING.md)
 for supported representations, explicit rejections and external metadata policies.
+See the [modular domain example](examples/domain/README.md) for a runnable import,
+generation and Godot runtime demonstration.
 
 ## Regenerating files
 

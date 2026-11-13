@@ -180,6 +180,15 @@ def _leaf_fits(
     )
 
 
+def _storage_leaves(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> set[tuple[str, frozenset]]:
+    """Flatten scalar unions, retaining collection hints and their nested leaf representations."""
+    alternatives = _alternatives(slot)
+    if not alternatives:
+        return {(_storage_type(sv, cls, slot), frozenset())}
+    leaves = {leaf for branch in alternatives for leaf in _storage_leaves(sv, cls, branch)}
+    return {(_storage_type(sv, cls, slot), frozenset(leaves))} if slot.multivalued else leaves
+
+
 def _inherited_compatible(
     sv: SchemaView,
     parent: ClassDefinition,
@@ -192,7 +201,7 @@ def _inherited_compatible(
     new = _storage_type(sv, cls, after)
     if field_default(sv, parent, before) != field_default(sv, cls, after):
         return False
-    if old == new:
+    if old == new and _storage_leaves(sv, parent, before) == _storage_leaves(sv, cls, after):
         return True
     if before.multivalued or after.multivalued:
         return False

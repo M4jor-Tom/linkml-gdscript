@@ -1247,6 +1247,76 @@ def test_inherited_alias_rejects_incompatible_collection_or_leaf(before: dict, a
 
 
 @pytest.mark.parametrize("operator", ["any_of", "exactly_one_of"])
+@pytest.mark.parametrize(
+    "before, after",
+    [
+        ([{"range": "string", "multivalued": True}], [{"range": "string"}]),
+        ([{"range": "integer"}, {"range": "string"}], [{"range": "boolean"}]),
+        ([{"range": "string"}], [{"range": "string", "multivalued": True}]),
+        ([{"range": "string", "multivalued": True}], [{"range": "integer", "multivalued": True}]),
+    ],
+    ids=["list-to-scalar", "unrelated-scalar", "scalar-to-list", "list-element"],
+)
+def test_inherited_alias_rejects_union_wrapped_changes(operator: str, before: list, after: list) -> None:
+    """Equal Variant hints cannot hide changed union leaves or collection shapes."""
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"value": {operator: before}}},
+            "Child": {"is_a": "Base", "attributes": {"value": {operator: after, "alias": "label"}}},
+        }
+    )
+    for operation in (mapping.class_slots, mapping.field_aliases):
+        with pytest.raises(ValueError, match="Child.value: incompatible inherited storage"):
+            operation(sv, sv.get_class("Child"))
+    with pytest.raises(ValueError, match="Child.value: incompatible inherited storage"):
+        GDScriptGenerator(sv.schema).render()
+
+
+@pytest.mark.parametrize("operator", ["any_of", "exactly_one_of"])
+@pytest.mark.parametrize("multivalued", [False, True])
+@pytest.mark.parametrize("changed", [False, True])
+def test_inherited_alias_nested_collection_union(operator: str, multivalued: bool, changed: bool) -> None:
+    """Collection-union aliases require unchanged represented leaves, even when nested."""
+    before = {operator: [{"range": "string"}, {"range": "integer"}], "multivalued": True}
+    after = {
+        operator: [{"range": "boolean"}] if changed else [{"range": "integer"}, {"range": "string"}],
+        "multivalued": True,
+    }
+    if not multivalued:
+        before, after = {operator: [before]}, {operator: [after]}
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"value": before}},
+            "Child": {"is_a": "Base", "attributes": {"value": {**after, "alias": "label"}}},
+        }
+    )
+    child = sv.get_class("Child")
+    if changed:
+        for operation in (mapping.class_slots, mapping.field_aliases):
+            with pytest.raises(ValueError, match="Child.value: incompatible inherited storage"):
+                operation(sv, child)
+    else:
+        hint = "Array[Variant]" if multivalued else "Variant"
+        assert mapping.class_slots(sv, child) == []
+        assert mapping.field_aliases(sv, child) == [("slot_label", "slot_value", hint)]
+        assert f"var slot_label: {hint}:" in GDScriptGenerator(sv.schema).render()["link_ml_child.gd"]
+
+
+@pytest.mark.parametrize("operator", ["any_of", "exactly_one_of"])
+def test_inherited_alias_union_wrapped_scalar_subset(operator: str) -> None:
+    """Wrapped scalar subsets still forward to the physical owner's Variant storage."""
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"value": {operator: [{"range": "string"}, {"range": "integer"}]}}},
+            "Child": {"is_a": "Base", "attributes": {"value": {operator: [{"range": "string"}], "alias": "label"}}},
+        }
+    )
+    child = sv.get_class("Child")
+    assert mapping.class_slots(sv, child) == []
+    assert mapping.field_aliases(sv, child) == [("slot_label", "slot_value", "Variant")]
+
+
+@pytest.mark.parametrize("operator", ["any_of", "exactly_one_of"])
 def test_inherited_alias_rejects_nested_list_union_to_scalar(operator: str) -> None:
     """Nested list branches cannot authorize scalar narrowing by losing cardinality."""
     sv = schema_view(

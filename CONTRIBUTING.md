@@ -31,7 +31,13 @@ uv run pytest --ignore=tests/test_godot.py
 uv run ruff check && uv run ruff format --check
 ```
 
-Optionally `uvx pre-commit install` to run ruff on every commit.
+Install the Ruff and golden-output hooks with `nix develop --command pre-commit install`.
+The golden hook is read-only and runs before every commit; normal pytest/CI also
+checks expectations. For intentional output changes, run
+`nix develop --command golden --update-goldens`, review the generated-source diff,
+and stage the golden files with the input/generator change. See the
+[golden workflow](README.md#golden-output). Never regenerate or stage expectations
+automatically from a hook.
 
 ### With Nix
 
@@ -39,6 +45,7 @@ Optionally `uvx pre-commit install` to run ruff on every commit.
 Godot 4 (`godot4`). On NixOS it is the supported way to work: there, call `ruff`
 directly instead of `uv run ruff` (the ruff binary uv installs cannot run), and
 test another interpreter with `uv run --isolated --python 3.11 pytest`.
+The Git hooks also use flake-provided Ruff, without a separate Python environment.
 
 Run the complete acceptance gates (including Godot) with:
 

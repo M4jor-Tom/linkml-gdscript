@@ -70,6 +70,33 @@ locally on Godot 4.7.2 and the advertised 4.5 floor. Python-only tests can run w
 `uv run pytest --ignore=tests/test_godot.py`; the engine test fails if Godot is
 missing rather than silently skipping acceptance.
 
+### Golden output
+
+Committed examples live in `tests/golden/<input-name>/*.gd`. Every top-level
+`tests/input/*.yaml` or `*.yml` schema is discovered automatically; use distinct
+filename stems. From the repository root:
+
+```shell
+nix develop --command golden                   # Read-only comparison
+nix develop --command golden --update-goldens  # Accept intentional generation changes
+```
+
+Checks generate into temporary directories and compare exact bytes and the complete
+`.gd` file set, including missing, extra and retired-fixture files. Updates replace
+expectations and retire obsolete `.gd` files only after every input generates
+successfully. Goldens contain source only, without ownership manifests or Godot caches.
+
+After an intentional change, regenerate, review `git diff -- tests/golden/`, and
+commit the expectations together with the input or generator change. For newly
+created goldens, stage them with `git add tests/golden/` to include them in the diff
+(`git diff --cached -- tests/golden/`). Never update goldens automatically in hooks
+or CI: normal pytest runs check them, and the pre-commit hook runs the same read-only
+check before every commit. Install the hooks with:
+
+```shell
+nix develop --command pre-commit install
+```
+
 Mapping logic lives in `src/linkml_gdscript/mapping.py` and `templates/`;
 `generator.py` handles loading, rendering and the CLI; `output.py` owns file
 preflight, staging and publication.

@@ -27,6 +27,9 @@
               pkgs.python311 # oldest Python in nixpkgs; CI also covers 3.10
               pkgs.ruff # the ruff wheel installed by uv cannot run on NixOS
               pkgs.pre-commit
+              (pkgs.writeShellScriptBin "golden" ''
+                exec ${pkgs.uv}/bin/uv run pytest tests/test_golden.py "$@"
+              '')
               engine
             ];
             # uv's downloaded interpreters cannot run on NixOS: use the ones above.

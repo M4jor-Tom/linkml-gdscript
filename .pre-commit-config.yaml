@@ -1,6 +1,21 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.4
+  - repo: local
     hooks:
       - id: ruff-check
+        name: ruff check
+        entry: nix develop --command ruff check --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter]
+        require_serial: true
       - id: ruff-format
+        name: ruff format
+        entry: nix develop --command ruff format --force-exclude
+        language: system
+        types_or: [python, pyi, jupyter, markdown]
+        require_serial: true
+      - id: golden
+        name: Check generated GDScript goldens
+        entry: nix develop --command golden
+        language: system
+        pass_filenames: false
+        always_run: true

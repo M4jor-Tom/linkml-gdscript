@@ -19,7 +19,9 @@ in `docs/superpowers/plans/2026-11-12-mapping.md`.
   snake_case; enum constants use `VALUE_` plus UPPER_SNAKE_CASE. Fixed prefixes
   avoid native Godot class/member/keyword collisions without depending on a
   running Godot installation or a maintained built-in blacklist.
-- Slot `alias` takes precedence over the original slot name.
+- Slot `alias` takes precedence over the original slot name. A new inherited alias
+  forwards to the original storage property; earlier exposed names stay available.
+  Reusing an ancestor name for the same logical slot emits no new property.
 - Class and slot names are normalized to ASCII identifiers. Enum constants
   preserve existing ASCII normalization; permissible values containing any
   non-ASCII character use `VALUE__` plus uppercase `U`-prefixed code points
@@ -59,13 +61,31 @@ for a resolvable supported value shape, but its constraints are not enforced in
 GDScript; keep the source schema for external validation.
 
 Use induced slots from `SchemaView` so mixins and `slot_usage` are resolved.
-Before suppressing inherited declarations, compare their effective field names,
-value/storage representations and initializers. Reject changed inherited aliases,
-initializers or incompatible storage shapes with a class/slot-specific error.
-Compatible constraint-only refinements remain external validation concerns;
-the source schema is authoritative for them. A mixin does not create Godot
-subtype identity. Reject cycles and inheritance that cannot be represented,
-including missing parents or cycles introduced by effective `slot_usage` ancestry.
+Before suppressing inherited declarations, compare value/storage representations
+and initializers against the immediate `is_a` parent. The earliest actual ancestor
+introducing a slot owns its storage, including slots flattened from mixins. New
+aliases are native getter/setter properties forwarding directly to that owner's
+property, with its physical type hint, no cast and no second initializer. Thus
+three-level aliases share one value; unchanged collection aliases share one
+container, independently initialized per instance. All still-exposed ancestor
+names participate in collision checks, even when current induced aliases differ.
+
+Allow equal representations and bounded scalar refinements: supported union
+alternatives may narrow to compatible scalar leaves, and inline objects may narrow
+to actual `is_a` subtypes. Keep the broader physical hint for aliases rather than
+filtering values assigned through base references. For example, an inherited
+`species` aliased to `race` forwards `slot_race` to `slot_species`; nullable values
+stay null until assigned. Reject changed defaults, primitive representations,
+scalar/container shapes, keyed storage or typed collection element hints with a
+class/slot-specific error. A mixin does not create Godot subtype identity.
+
+These checks establish representation compatibility, not full logical implication
+or enforcement of child constraints. LinkML may retain inherited union alternatives
+under a range-only `slot_usage` refinement; map that actual induced expression, not
+an assumed subset. Compatible constraints remain external validation concerns;
+the source schema is authoritative. Reject cycles and inheritance that cannot be
+represented, including missing parents or cycles introduced by effective
+`slot_usage` ancestry.
 
 ## Values and cardinality
 
@@ -187,6 +207,9 @@ jobs. Missing Godot fails the integration test.
 The templates additionally call `mapping.string_literal(text)` for safe source
 literals and `mapping.escape_description(text)` before the existing `doc_comment`
 filter. The class template also consumes `emits_extra_slots` to emit dynamic
-storage when policy allows. The test-only naive mapper deliberately reuses the
-literal helpers; the nine public mapping entry points and generator contexts
-remain unchanged.
+storage when policy allows, and `field_aliases(sv, cls)` for ordered
+`(alias_name, backing_name, physical_type_hint)` forwarding properties.
+`class_slots` returns only fixed slots needing storage; `field_name` remains the
+effective public name, not a storage resolver. The test-only naive mapper
+deliberately reuses the literal helpers and emits no forwarding aliases;
+generator contexts remain unchanged.

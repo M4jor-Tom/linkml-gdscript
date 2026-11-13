@@ -500,7 +500,6 @@ def test_invalid_defaults(range_name: str, default: str) -> None:
 @pytest.mark.parametrize(
     "usage",
     [
-        {"alias": "other"},
         {"range": "integer"},
         {"ifabsent": "string(changed)"},
         {"multivalued": True},
@@ -1036,3 +1035,237 @@ def test_decimal_default_preserves_lexical_exponent_without_decimal_conversion()
         }
     )
     assert mapping.field_default(sv, sv.get_class("C"), sv.induced_slot("value", "C")) == f'"{text}"'
+
+
+def test_inherited_alias_forwards_to_backing_field() -> None:
+    """A child alias and a supported scalar narrowing do not fork state."""
+    sv = schema_view(
+        classes={
+            "Base": {
+                "attributes": {
+                    "value": {
+                        "any_of": [
+                            {"range": "string"},
+                            {"range": "integer"},
+                        ]
+                    }
+                }
+            },
+            "Child": {
+                "is_a": "Base",
+                "slot_usage": {
+                    "value": {
+                        "alias": "label",
+                        "any_of": [{"range": "string"}],
+                    }
+                },
+            },
+            "Grandchild": {"is_a": "Child", "slot_usage": {"value": {"alias": "caption"}}},
+        }
+    )
+    child = sv.get_class("Child")
+    grandchild = sv.get_class("Grandchild")
+    assert mapping.class_slots(sv, child) == []
+    assert mapping.field_aliases(sv, child) == [("slot_label", "slot_value", "Variant")]
+    assert mapping.field_aliases(sv, grandchild) == [("slot_caption", "slot_value", "Variant")]
+
+
+def test_inherited_alias_range_only_refinement_keeps_induced_union() -> None:
+    """Range-only slot_usage retains inherited alternatives in the effective expression."""
+    sv = schema_view(
+        slots={"value": {}},
+        classes={
+            "Base": {
+                "slots": ["value"],
+                "slot_usage": {"value": {"any_of": [{"range": "string"}, {"range": "integer"}]}},
+            },
+            "Child": {"is_a": "Base", "slot_usage": {"value": {"range": "string", "alias": "label"}}},
+        },
+    )
+    slot = sv.induced_slot("value", "Child")
+    assert slot.range == "string"
+    assert [branch.range for branch in slot.any_of] == ["string", "integer"]
+    assert slot.exactly_one_of == []
+    assert mapping.field_type(sv, sv.get_class("Child"), slot) == "Variant"
+    assert mapping.class_slots(sv, sv.get_class("Child")) == []
+    assert mapping.field_aliases(sv, sv.get_class("Child")) == [("slot_label", "slot_value", "Variant")]
+
+
+@pytest.mark.parametrize("range_name", ["string", "integer", "boolean"])
+def test_inherited_alias_only_preserves_primitive_absence(range_name: str) -> None:
+    """Alias-only changes keep null rather than inventing a primitive default."""
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"value": {"range": range_name}}},
+            "Child": {"is_a": "Base", "slot_usage": {"value": {"alias": "other"}}},
+        }
+    )
+    files = GDScriptGenerator(sv.schema).render()
+    assert "var slot_value: Variant = null" in files["link_ml_base.gd"]
+    assert (
+        "var slot_other: Variant:\n    get:\n        return slot_value\n    set(value):\n        slot_value = value"
+        in files["link_ml_child.gd"]
+    )
+    assert " = null" not in files["link_ml_child.gd"]
+    assert mapping.field_name(sv, sv.get_class("Child"), sv.induced_slot("value", "Child")) == "slot_other"
+
+
+@pytest.mark.parametrize("alias", ["value", "label"])
+def test_inherited_alias_reuses_exposed_ancestor_name(alias: str) -> None:
+    """Reverting to an already exposed name must not redeclare or self-forward."""
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"value": {}}},
+            "Child": {"is_a": "Base", "slot_usage": {"value": {"alias": "label"}}},
+            "Grandchild": {"is_a": "Child", "slot_usage": {"value": {"alias": "caption"}}},
+            "Reverted": {"is_a": "Grandchild", "slot_usage": {"value": {"alias": alias}}},
+        }
+    )
+    assert mapping.field_aliases(sv, sv.get_class("Reverted")) == []
+    assert "var slot_" not in GDScriptGenerator(sv.schema).render()["link_ml_reverted.gd"]
+
+
+def test_inherited_alias_collision_with_hidden_ancestor_name() -> None:
+    """Earlier exposed names survive even when no current induced alias uses them."""
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"value": {}}},
+            "Child": {"is_a": "Base", "slot_usage": {"value": {"alias": "label"}}},
+            "Grandchild": {"is_a": "Child", "attributes": {"other": {"alias": "value"}}},
+        }
+    )
+    assert {slot.alias for slot in sv.class_induced_slots("Grandchild")} == {"label", "value"}
+    for operation in (mapping.class_slots, mapping.field_aliases):
+        with pytest.raises(ValueError, match="Grandchild.*(?:other.*value|value.*other)"):
+            operation(sv, sv.get_class("Grandchild"))
+    with pytest.raises(ValueError, match="Grandchild.*slot_value"):
+        mapping.field_name(sv, sv.get_class("Grandchild"), sv.induced_slot("other", "Grandchild"))
+
+
+def test_inherited_array_alias_uses_concrete_mixin_storage_owner() -> None:
+    """Flattened mixin storage belongs to its first actual class, including its alias."""
+    sv = schema_view(
+        classes={
+            "Mixin": {"mixin": True, "attributes": {"items": {"multivalued": True}}},
+            "Base": {"mixins": ["Mixin"], "slot_usage": {"items": {"alias": "values"}}},
+            "Child": {"is_a": "Base", "slot_usage": {"items": {"alias": "labels"}}},
+        }
+    )
+    assert [slot.name for slot in mapping.class_slots(sv, sv.get_class("Base"))] == ["items"]
+    assert mapping.class_slots(sv, sv.get_class("Child")) == []
+    assert mapping.field_aliases(sv, sv.get_class("Child")) == [("slot_labels", "slot_values", "Array[String]")]
+    files = GDScriptGenerator(sv.schema).render()
+    assert "var slot_values: Array[String] = []" in files["link_ml_base.gd"]
+    assert "var slot_labels: Array[String]:" in files["link_ml_child.gd"]
+    assert "return slot_values" in files["link_ml_child.gd"]
+
+
+def test_inherited_inline_alias_keeps_physical_owner_type() -> None:
+    """Inline scalar subtypes share a nullable broad hint without casts or validation."""
+    sv = schema_view(
+        classes={
+            "Item": {},
+            "Special": {"is_a": "Item"},
+            "Specific": {"is_a": "Special"},
+            "Base": {"attributes": {"value": {"range": "Item", "inlined": True}}},
+            "Child": {"is_a": "Base", "slot_usage": {"value": {"range": "Special", "alias": "label"}}},
+            "Grandchild": {"is_a": "Child", "slot_usage": {"value": {"range": "Specific", "alias": "caption"}}},
+        }
+    )
+    for name, alias in [("Child", "label"), ("Grandchild", "caption")]:
+        assert mapping.class_slots(sv, sv.get_class(name)) == []
+        assert mapping.field_aliases(sv, sv.get_class(name)) == [(f"slot_{alias}", "slot_value", "LinkMLItem")]
+    files = GDScriptGenerator(sv.schema).render()
+    assert "var slot_value: LinkMLItem = null" in files["link_ml_base.gd"]
+    source = files["link_ml_grandchild.gd"]
+    assert "var slot_caption: LinkMLItem:" in source
+    assert " as " not in source and " = null" not in source
+
+
+@pytest.mark.parametrize("subtype", [False, True])
+def test_inherited_inline_refinement_requires_immediate_parent_subtype(subtype: bool) -> None:
+    """Mixin membership is not subtyping, and an earlier broad owner cannot excuse widening."""
+    sv = schema_view(
+        classes={
+            "Item": {"mixin": not subtype},
+            "Special": {"is_a": "Item"} if subtype else {"mixins": ["Item"]},
+            "Base": {"attributes": {"value": {"range": "Item", "inlined": True}}},
+            "Child": {"is_a": "Base", "slot_usage": {"value": {"range": "Special", "alias": "label"}}},
+            "Grandchild": {"is_a": "Child", "slot_usage": {"value": {"range": "Item", "alias": "caption"}}},
+        }
+    )
+    rejected = "Grandchild" if subtype else "Child"
+    for operation in (mapping.class_slots, mapping.field_aliases):
+        with pytest.raises(ValueError, match=f"{rejected}.value: incompatible inherited storage"):
+            operation(sv, sv.get_class(rejected))
+
+
+def test_inherited_union_to_reference_preserves_identifier_representation() -> None:
+    """A scalar ID reference can narrow a union without becoming an inline object."""
+    sv = schema_view(
+        classes={
+            "Item": {"attributes": {"id": {"range": "integer", "identifier": True}}},
+            "Base": {"attributes": {"value": {"any_of": [{"range": "string"}, {"range": "Item"}]}}},
+            "Child": {"is_a": "Base", "attributes": {"value": {"range": "Item", "alias": "reference"}}},
+        }
+    )
+    slot = sv.induced_slot("value", "Child")
+    assert slot.range == "Item" and slot.any_of == [] and not sv.is_inlined(slot)
+    assert mapping.field_aliases(sv, sv.get_class("Child")) == [("slot_reference", "slot_value", "Variant")]
+    assert mapping.class_slots(sv, sv.get_class("Child")) == []
+
+
+@pytest.mark.parametrize(
+    "before, after",
+    [
+        ({"range": "string", "multivalued": True}, {"range": "integer", "multivalued": True}),
+        (
+            {"range": "Item", "inlined": True, "multivalued": True},
+            {"range": "Item", "inlined_as_list": True, "multivalued": True},
+        ),
+        (
+            {"range": "Item", "inlined_as_list": True, "multivalued": True},
+            {"range": "Special", "inlined_as_list": True, "multivalued": True},
+        ),
+        ({"any_of": [{"range": "string", "multivalued": True}]}, {"range": "string"}),
+        ({"any_of": [{"range": "integer"}, {"range": "string"}]}, {"range": "boolean"}),
+    ],
+)
+def test_inherited_alias_rejects_incompatible_collection_or_leaf(before: dict, after: dict) -> None:
+    """Aliases do not hide changed containers, element hints, or unsupported scalar leaves."""
+    sv = schema_view(
+        classes={
+            "Item": {"attributes": {"id": {"identifier": True}}},
+            "Special": {"is_a": "Item"},
+            "Base": {"attributes": {"value": before}},
+            "Child": {"is_a": "Base", "attributes": {"value": {**after, "alias": "label"}}},
+        }
+    )
+    for operation in (mapping.class_slots, mapping.field_aliases):
+        with pytest.raises(ValueError, match="Child.value: incompatible inherited storage"):
+            operation(sv, sv.get_class("Child"))
+
+
+@pytest.mark.parametrize("operator", ["any_of", "exactly_one_of"])
+def test_inherited_alias_rejects_nested_list_union_to_scalar(operator: str) -> None:
+    """Nested list branches cannot authorize scalar narrowing by losing cardinality."""
+    sv = schema_view(
+        classes={
+            "Base": {
+                "attributes": {
+                    "value": {
+                        operator: [
+                            {
+                                "multivalued": True,
+                                operator: [{"range": "integer"}, {"range": "string"}],
+                            }
+                        ]
+                    }
+                }
+            },
+            "Child": {"is_a": "Base", "attributes": {"value": {"range": "integer", "alias": "label"}}},
+        }
+    )
+    for operation in (mapping.class_slots, mapping.field_aliases):
+        with pytest.raises(ValueError, match="Child.value: incompatible inherited storage"):
+            operation(sv, sv.get_class("Child"))

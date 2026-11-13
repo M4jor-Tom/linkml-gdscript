@@ -116,12 +116,7 @@ def _field_name(slot: SlotDefinition) -> str:
 def field_name(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
     """Return a safe field name, checking all effective fields for collisions."""
     _check_ancestry(sv, cls.name)
-    names: dict[str, str] = {}
-    for effective in sv.class_induced_slots(cls.name):
-        name = _field_name(effective)
-        if name in names and names[name] != effective.name:
-            raise ValueError(f"{cls.name}: fields {names[name]!r} and {effective.name!r} map to {name}")
-        names[name] = effective.name
+    _field_symbols(sv, cls)
     return _field_name(slot)
 
 
@@ -135,15 +130,107 @@ def class_slots(sv: SchemaView, cls: ClassDefinition) -> list[SlotDefinition]:
         if slot.name in inherited:
             parent_slot = inherited[slot.name]
             parent = sv.get_class(cls.is_a, strict=True)
-            current = (_field_name(slot), _storage_type(sv, cls, slot), field_default(sv, cls, slot))
-            previous = (
-                _field_name(parent_slot),
-                _storage_type(sv, parent, parent_slot),
-                field_default(sv, parent, parent_slot),
-            )
-            if current != previous:
-                raise ValueError(f"{cls.name}.{slot.name}: incompatible inherited storage {previous} -> {current}")
+            if not _inherited_compatible(sv, parent, parent_slot, cls, slot):
+                raise ValueError(f"{cls.name}.{slot.name}: incompatible inherited storage")
     return [slot for slot in slots if slot.name not in inherited]
+
+
+def _storage_owner(
+    sv: SchemaView,
+    cls: ClassDefinition,
+    slot_name: str,
+) -> tuple[ClassDefinition, SlotDefinition]:
+    """Find the actual single-inheritance owner of one stored slot."""
+    owner = cls
+    while owner.is_a:
+        parent = sv.get_class(owner.is_a, strict=True)
+        if slot_name not in {slot.name for slot in sv.class_induced_slots(parent.name)}:
+            break
+        owner = parent
+    return owner, sv.induced_slot(slot_name, owner.name)
+
+
+def _scalar_leaves(slot: SlotDefinition) -> list[SlotDefinition]:
+    """Keep leaf slot flags so collection alternatives cannot masquerade as scalars."""
+    if slot.multivalued:
+        return [slot]
+    alternatives = _alternatives(slot)
+    return [leaf for branch in alternatives for leaf in _scalar_leaves(branch)] if alternatives else [slot]
+
+
+def _leaf_fits(
+    sv: SchemaView,
+    parent: ClassDefinition,
+    before: SlotDefinition,
+    cls: ClassDefinition,
+    after: SlotDefinition,
+) -> bool:
+    """Accept equal value representations or actual inline scalar subtypes."""
+    if before.multivalued or after.multivalued:
+        return False
+    if _storage_type(sv, parent, before) == _storage_type(sv, cls, after):
+        return True
+    classes = sv.all_classes()
+    return (
+        before.range in classes
+        and after.range in classes
+        and sv.is_inlined(before)
+        and sv.is_inlined(after)
+        and before.range in sv.class_ancestors(after.range, mixins=False)
+    )
+
+
+def _inherited_compatible(
+    sv: SchemaView,
+    parent: ClassDefinition,
+    before: SlotDefinition,
+    cls: ClassDefinition,
+    after: SlotDefinition,
+) -> bool:
+    """Preserve defaults and storage, allowing only bounded scalar refinement."""
+    old = _storage_type(sv, parent, before)
+    new = _storage_type(sv, cls, after)
+    if field_default(sv, parent, before) != field_default(sv, cls, after):
+        return False
+    if old == new:
+        return True
+    if before.multivalued or after.multivalued:
+        return False
+    return all(any(_leaf_fits(sv, parent, p, cls, c) for p in _scalar_leaves(before)) for c in _scalar_leaves(after))
+
+
+def _field_symbols(sv: SchemaView, cls: ClassDefinition) -> dict[str, str]:
+    """Include names still exposed through ancestors, not only current aliases."""
+    names: dict[str, str] = {}
+    for ancestor in sv.class_ancestors(cls.name, mixins=False):
+        for slot in sv.class_induced_slots(ancestor):
+            name = _field_name(slot)
+            if name in names and names[name] != slot.name:
+                raise ValueError(f"{cls.name}: fields {names[name]!r} and {slot.name!r} map to {name}")
+            names[name] = slot.name
+    return names
+
+
+def field_aliases(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str, str]]:
+    """Describe forwarding properties; none owns another stored value."""
+    _check_ancestry(sv, cls.name)
+    _field_symbols(sv, cls)
+    if not cls.is_a:
+        return []
+    parent = sv.get_class(cls.is_a, strict=True)
+    inherited = {slot.name: slot for slot in sv.class_induced_slots(parent.name)}
+    exposed = _field_symbols(sv, parent)
+    aliases = []
+    for slot in sv.class_induced_slots(cls.name):
+        if slot.name not in inherited:
+            continue
+        if not _inherited_compatible(sv, parent, inherited[slot.name], cls, slot):
+            raise ValueError(f"{cls.name}.{slot.name}: incompatible inherited storage")
+        name = _field_name(slot)
+        if exposed.get(name) != slot.name:
+            owner, stored = _storage_owner(sv, cls, slot.name)
+            aliases.append((name, _field_name(stored), field_type(sv, owner, stored)))
+    return aliases
 
 
 def _primitive(sv: SchemaView, name: str, path: tuple[str, ...] = ()) -> str:

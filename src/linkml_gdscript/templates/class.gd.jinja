@@ -20,3 +20,11 @@ var linkml_extra_slots: Dictionary[String, Variant] = {}
 var {{ field.name }}: {{ field.type }}{% if field.default is not none %} = {{ field.default }}{% endif %}
 
 {% endfor %}
+{% for alias_name, backing_name, type_hint in mapping.field_aliases(sv, cls) %}
+
+var {{ alias_name }}: {{ type_hint }}:
+    get:
+        return {{ backing_name }}
+    set(value):
+        {{ backing_name }} = value
+{% endfor %}

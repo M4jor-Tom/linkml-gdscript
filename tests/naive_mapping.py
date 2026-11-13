@@ -24,6 +24,11 @@ def class_slots(sv: SchemaView, cls: ClassDefinition) -> list[SlotDefinition]:
     return sv.class_induced_slots(cls.name)
 
 
+def field_aliases(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str, str]]:
+    """The naive mapper intentionally emits no inherited forwarding aliases."""
+    return []
+
+
 def emits_extra_slots(sv: SchemaView, cls: ClassDefinition) -> bool:
     """The naive mapper intentionally emits no dynamic storage."""
     return False

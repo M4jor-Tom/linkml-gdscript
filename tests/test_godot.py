@@ -78,6 +78,27 @@ def test_generated_scripts_run_in_godot(sv: SchemaView, tmp_path: Path, engine: 
         attributes={"title": {"range": "string"}},
         extra_slots={"allowed": True},
     )
+    for name, definition in {
+        "Base": {"attributes": {"value": {"any_of": [{"range": "string"}, {"range": "integer"}]}}},
+        "Child": {"is_a": "Base", "slot_usage": {"value": {"alias": "label", "any_of": [{"range": "string"}]}}},
+        "Grandchild": {"is_a": "Child", "slot_usage": {"value": {"alias": "caption"}}},
+        "ArrayBase": {"attributes": {"items": {"range": "string", "multivalued": True}}},
+        "ArrayChild": {"is_a": "ArrayBase", "slot_usage": {"items": {"alias": "labels"}}},
+        "NarrowAddress": {"is_a": "Address"},
+        "ObjectBase": {"attributes": {"address": {"range": "Address", "inlined": True}}},
+        "ObjectChild": {
+            "is_a": "ObjectBase",
+            "slot_usage": {"address": {"range": "NarrowAddress", "alias": "special_address"}},
+        },
+        "PrimitiveBase": {
+            "attributes": {"count": {"range": "integer"}, "flag": {"range": "boolean"}, "text": {"range": "string"}}
+        },
+        "PrimitiveChild": {
+            "is_a": "PrimitiveBase",
+            "slot_usage": {"count": {"alias": "number"}, "flag": {"alias": "enabled"}, "text": {"alias": "label"}},
+        },
+    }.items():
+        schema.classes[name] = ClassDefinition(name=name, **definition)
     GDScriptGenerator(schema).serialize(directory=tmp_path)
     (tmp_path / "project.godot").write_text(
         'config_version=5\n[application]\nconfig/name="Mapping acceptance"\n',
@@ -140,6 +161,41 @@ func _initialize() -> void:
     assert(values.slot_nested_choice == 7)
     values.slot_nested_choice = "text"
     assert(values.slot_nested_choice == "text")
+    var child = LinkMLGrandchild.new()
+    var base: LinkMLBase = child
+    assert(child.slot_caption == null)
+    child.slot_caption = "text"
+    assert(base.slot_value == "text" and child.slot_label == "text")
+    base.slot_value = "other"
+    assert(child.slot_caption == "other")
+    var array_child = LinkMLArrayChild.new()
+    var array_base: LinkMLArrayBase = array_child
+    array_child.slot_labels.append("one")
+    assert(array_base.slot_items == ["one"])
+    assert(LinkMLArrayChild.new().slot_labels.is_empty())
+    var replacement: Array[String] = ["two"]
+    array_child.slot_labels = replacement
+    assert(array_base.slot_items == ["two"])
+    var object_child = LinkMLObjectChild.new()
+    var object_base: LinkMLObjectBase = object_child
+    assert(object_child.slot_special_address == null)
+    object_child.slot_special_address = LinkMLNarrowAddress.new()
+    assert(object_base.slot_address == object_child.slot_special_address)
+    # Narrowed schema constraints stay external: aliases keep the broad physical hint.
+    object_base.slot_address = LinkMLAddress.new()
+    assert(object_child.slot_special_address == object_base.slot_address)
+    object_child.slot_special_address = null
+    assert(object_base.slot_address == null)
+    var primitive = LinkMLPrimitiveChild.new()
+    assert(primitive.slot_number == null and primitive.slot_enabled == null and primitive.slot_label == null)
+    primitive.slot_number = 0
+    primitive.slot_enabled = false
+    primitive.slot_label = ""
+    assert(primitive.slot_count == 0 and primitive.slot_flag == false and primitive.slot_text == "")
+    primitive.slot_count = null
+    primitive.slot_flag = null
+    primitive.slot_text = null
+    assert(primitive.slot_number == null and primitive.slot_enabled == null and primitive.slot_label == null)
     print("MAPPING_RUNTIME_OK")
     quit()
 """,

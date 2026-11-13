@@ -33,6 +33,28 @@ loading and saving, and Inspector integration remain the caller's responsibility
 Keep the source schema for validation. See [the mapping contract](docs/MAPPING.md)
 for supported representations, explicit rejections and external metadata policies.
 
+## Regenerating files
+
+Use a dedicated generated subdirectory for each schema ID. The generator records
+its `.gd` filenames and SHA256 hashes in `.linkml-gdscript.json` (format 1).
+Regeneration verifies **all** previously owned scripts, replaces current scripts,
+and removes only verified obsolete scripts. Keep the manifest with the output;
+missing or edited owned files, another schema ID, unsafe paths/symlinks, and
+collisions with unmanaged filenames (including case variants) refuse generation
+before writing. Generated scripts are not intended for handwritten edits.
+
+Legacy output without a manifest is unmanaged: generate into a **fresh directory**
+and deliberately replace the old generated directory after preserving any manual
+work. There is no adopt/force option. Unrelated files, subdirectories, `.godot/`
+and Godot-created `.gd.uid` sidecars are retained, even for retired scripts.
+
+Rendering and preflight finish before publication, and staging failures leave old
+scripts intact. Use one writer at a time. Individual replacements are atomic, but
+multi-file publication is **not a transaction**: an I/O failure or power loss may
+leave partial output. Errors propagate; recover by generating into a fresh
+directory, not by deleting the manifest to bypass checks. Stdout remains source
+only, without a manifest.
+
 ## Development
 
 ```shell
@@ -47,7 +69,8 @@ locally on Godot 4.7.2 and the advertised 4.5 floor. Python-only tests can run w
 missing rather than silently skipping acceptance.
 
 Mapping logic lives in `src/linkml_gdscript/mapping.py` and `templates/`;
-`generator.py` handles loading, rendering, the CLI and file writing.
+`generator.py` handles loading, rendering and the CLI; `output.py` owns file
+preflight, staging and publication.
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

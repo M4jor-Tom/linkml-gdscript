@@ -204,3 +204,71 @@ func _initialize() -> void:
     output = run_godot(engine, tmp_path, "--script", "check.gd")
     assert "MAPPING_RUNTIME_OK" in output, output
     print(output)
+
+
+@pytest.mark.parametrize("seed_stale_child", [False, True], ids=["regenerated", "stale-negative-oracle"])
+def test_regenerated_scripts_in_godot(tmp_path: Path, engine: str, seed_stale_child: bool) -> None:
+    """Retirement prevents the specific duplicate-member failure of a stale child."""
+    schema = SchemaView("""id: https://example.org/review/regeneration
+name: regeneration
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports: [linkml:types]
+default_range: string
+classes:
+  Parent: {}
+  Child:
+    is_a: Parent
+    attributes:
+      value: {}
+""").schema
+    project = tmp_path / "project.godot"
+    project.write_text('config_version=5\n[application]\nconfig/name="Regeneration acceptance"\n', encoding="utf-8")
+    runner = tmp_path / "check.gd"
+    runner.write_text(
+        """extends SceneTree
+func _initialize() -> void:
+    var parent = LinkMLParent.new()
+    assert(parent.slot_value == null)
+    parent.slot_value = "new parent storage"
+    assert(parent.slot_value == "new parent storage")
+    print("REGENERATION_RUNTIME_OK")
+    quit()
+""",
+        encoding="utf-8",
+    )
+    project_bytes, runner_bytes = project.read_bytes(), runner.read_bytes()
+    generated = tmp_path / "generated"
+    GDScriptGenerator(schema).serialize(directory=generated)
+    child_source = (generated / "link_ml_child.gd").read_text(encoding="utf-8")
+    del schema.classes["Child"]
+    schema.classes["Parent"] = ClassDefinition(name="Parent", attributes={"value": {}})
+    GDScriptGenerator(schema).serialize(directory=generated)
+    assert {p.name for p in generated.glob("*.gd")} == {"link_ml_parent.gd"}
+    assert project.read_bytes() == project_bytes and runner.read_bytes() == runner_bytes
+    if seed_stale_child:
+        # Deliberately recreate the pre-fix output in this separate temporary project.
+        (generated / "link_ml_child.gd").write_text(child_source, encoding="utf-8")
+        subprocess.run(
+            [engine, "--headless", "--path", str(tmp_path), "--editor", "--quit"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        result = subprocess.run(
+            [engine, "--headless", "--path", str(tmp_path), "--script", "generated/link_ml_child.gd", "--check-only"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        assert 'The member "slot_value" already exists in parent class LinkMLParent' in output, output
+        print("STALE_CHILD_DIAGNOSTIC_CONFIRMED\n" + output)
+    else:
+        print(run_godot(engine, tmp_path, "--editor", "--quit"))
+        output = run_godot(engine, tmp_path, "--script", "check.gd")
+        assert "REGENERATION_RUNTIME_OK" in output, output
+        print(output)
+    assert project.read_bytes() == project_bytes and runner.read_bytes() == runner_bytes

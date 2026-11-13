@@ -11,6 +11,18 @@ use `tests/test_godot.py` to verify that generated scripts parse and run.
 The templates also use `string_literal` and `escape_description` helpers, shared
 explicitly with the test-only naive mapper.
 
+Generated-file ownership lives in `output.py`, separate from mapping and rendering.
+Keep `serialize()` rendering the complete model before calling the writer. Tests
+in `tests/test_output.py` exercise real files, deterministic format-1 manifests,
+SHA256 verification, hostile names/symlinks, preserved neighbors and staging
+failures. Regeneration tests must preserve project/runner files outside the owned
+subdirectory and verify the exact script set with both Godot shells; the stale-child
+negative oracle must detect the duplicate `slot_value` diagnostic specifically.
+See [regeneration usage](README.md#regenerating-files) for fresh-directory migration,
+single-schema ownership, edited-file refusal, retained UID sidecars and the
+single-writer, non-transactional publication limit. Do not add adoption, force,
+recursive cleanup or rollback behavior.
+
 ## Setup
 
 ```shell

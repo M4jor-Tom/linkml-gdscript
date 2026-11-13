@@ -1,9 +1,15 @@
-"""Tests of the plumbing, independent of the real mapping (they use ``naive_mapping``)."""
+"""Generator plumbing with a naive mapper, plus real-mapping regeneration regressions."""
+
+import json
+from hashlib import sha256
+from pathlib import Path
 
 import naive_mapping
 import pytest
 from click.testing import CliRunner
 from conftest import KITCHEN_SINK
+from linkml_runtime.linkml_model.meta import ClassDefinition
+from linkml_runtime.utils.schemaview import SchemaView
 
 from linkml_gdscript.generator import GDScriptGenerator, cli
 
@@ -56,14 +62,81 @@ def test_no_template_syntax_leaks_into_output(files):
 
 def test_serialize_writes_the_rendered_files(files, tmp_path):
     out = tmp_path / "nested" / "out"
-    GDScriptGenerator(KITCHEN_SINK, mapping=naive_mapping).serialize(directory=out)
-    assert {p.name: p.read_text(encoding="utf-8") for p in out.iterdir()} == files
+    generator = GDScriptGenerator(KITCHEN_SINK, mapping=naive_mapping)
+    source = generator.serialize(directory=out)
+    assert {p.name: p.read_text(encoding="utf-8") for p in out.glob("*.gd")} == files
+    assert source == generator.serialize() == "\n".join(files.values())
+    assert json.loads((out / ".linkml-gdscript.json").read_text()) == {
+        "format": 1,
+        "schema_id": str(generator.schemaview.schema.id),
+        "files": {name: sha256(text.encode("utf-8")).hexdigest() for name, text in files.items()},
+    }
+
+
+def test_regeneration_removes_obsolete_child(tmp_path: Path) -> None:
+    """Retire the child before its former field moves into the parent."""
+    before = SchemaView("""id: https://example.org/review/regeneration
+name: regeneration
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports: [linkml:types]
+default_range: string
+classes:
+  Parent: {}
+  Child:
+    is_a: Parent
+    attributes:
+      value: {}
+""")
+    after = SchemaView("""id: https://example.org/review/regeneration
+name: regeneration
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports: [linkml:types]
+default_range: string
+classes:
+  Parent:
+    attributes:
+      value: {}
+""")
+    GDScriptGenerator(before.schema).serialize(directory=tmp_path)
+    GDScriptGenerator(after.schema).serialize(directory=tmp_path)
+    assert not (tmp_path / "link_ml_child.gd").exists()
 
 
 def test_colliding_file_names_are_rejected(monkeypatch):
     monkeypatch.setattr(naive_mapping, "file_name", lambda name: "same.gd")
     with pytest.raises(ValueError, match="same.gd"):
         GDScriptGenerator(KITCHEN_SINK, mapping=naive_mapping).render()
+
+
+@pytest.mark.parametrize("invalid", ["range", "collision"])
+def test_generation_failure_preserves_owned_output(tmp_path: Path, invalid: str) -> None:
+    """Invalid schema references and render collisions precede writer mutation."""
+    schema = SchemaView("""id: urn:test
+name: failure
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports: [linkml:types]
+classes:
+  Model:
+    attributes:
+      value:
+        range: string
+""").schema
+    out = tmp_path / "generated"
+    GDScriptGenerator(schema).serialize(directory=out)
+    before = {p.name: p.read_bytes() for p in out.iterdir()}
+    if invalid == "range":
+        schema.classes["Model"].attributes["value"].range = "Missing"
+        generator = GDScriptGenerator(schema)
+        with pytest.raises(ValueError, match="Missing"):
+            generator.serialize(directory=out)
+    else:
+        schema.classes["model"] = ClassDefinition(name="model")
+        with pytest.raises(ValueError, match="collision"):
+            GDScriptGenerator(schema).serialize(directory=out)
+    assert {p.name: p.read_bytes() for p in out.iterdir()} == before
 
 
 def test_cli_help():

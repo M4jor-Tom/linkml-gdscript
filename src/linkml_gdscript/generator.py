@@ -16,6 +16,7 @@ from linkml.utils.generator import Generator, shared_arguments
 from linkml_runtime.linkml_model.meta import PermissibleValue, SlotDefinition
 
 from linkml_gdscript import mapping as default_mapping
+from linkml_gdscript.output import write_generated_files
 
 
 def doc_comment(text: str | None, indent: str = "") -> str:
@@ -113,10 +114,7 @@ class GDScriptGenerator(Generator):
         """
         files = self.render()
         if directory is not None:
-            out = Path(directory)
-            out.mkdir(parents=True, exist_ok=True)
-            for file_name, source in files.items():
-                (out / file_name).write_text(source, encoding="utf-8")
+            write_generated_files(directory, files, str(self.schemaview.schema.id))
         return "\n".join(files.values())
 
 

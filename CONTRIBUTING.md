@@ -46,6 +46,9 @@ Godot 4 (`godot4`). On NixOS it is the supported way to work: there, call `ruff`
 directly instead of `uv run ruff` (the ruff binary uv installs cannot run), and
 test another interpreter with `uv run --isolated --python 3.11 pytest`.
 The Git hooks also use flake-provided Ruff, without a separate Python environment.
+The shared shell exposes PyOxigraph's C++ runtime through `LD_LIBRARY_PATH`, preserving
+inherited entries, so LinkML tools such as `uv run gen-erdiagram tests/input/kitchen_sink.yaml`
+can load their native dependencies.
 
 Run the complete acceptance gates (including Godot) with:
 
@@ -62,8 +65,8 @@ separately from the Nix-provisioned Godot job. Qualify both the current engine a
 the advertised Godot 4.5 floor with:
 
 ```shell
-nix develop --command uv run pytest tests/test_godot.py -s
-nix develop .#godot-floor --command uv run pytest tests/test_godot.py -s
+nix develop --command uv run pytest tests/test_godot.py tests/test_linkml_cli.py -s
+nix develop .#godot-floor --command uv run pytest tests/test_godot.py tests/test_linkml_cli.py -s
 ```
 
 ## Code conventions

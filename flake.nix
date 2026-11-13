@@ -32,6 +32,10 @@
               '')
               engine
             ];
+            # PyOxigraph's PyPI wheel needs the C++ runtime at import time.
+            shellHook = ''
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            '';
             # uv's downloaded interpreters cannot run on NixOS: use the ones above.
             UV_PYTHON_DOWNLOADS = "never";
             GODOT_EXPECTED_VERSION = expectedVersion;

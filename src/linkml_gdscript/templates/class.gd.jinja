@@ -7,6 +7,11 @@ extends {{ base }}
 {% if cls.description %}
 {{ mapping.escape_description(cls.description) | doc_comment }}
 {% endif %}
+{% if mapping.emits_extra_slots(sv, cls) %}
+
+## Extra data storage; validate entries against this class's source-schema policy.
+var linkml_extra_slots: Dictionary[String, Variant] = {}
+{% endif %}
 {% for field in fields %}
 
 {% if field.slot.description %}

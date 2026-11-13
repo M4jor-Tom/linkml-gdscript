@@ -165,6 +165,34 @@ def _expression_slot(slot: SlotDefinition, expression: AnonymousSlotExpression) 
     return replace(slot, **overrides)
 
 
+def _allows_extra_slots(sv: SchemaView, cls: ClassDefinition) -> bool:
+    """Check this class's extra-data policy without inheriting permission."""
+    extra = cls.extra_slots
+    if extra is None:
+        return False
+    if extra.allowed is not None:
+        if extra.range_expression is not None:
+            raise ValueError(f"{cls.name}.extra_slots: allowed plus range_expression is unsupported")
+        return bool(extra.allowed)
+    if extra.range_expression is None:
+        return False
+    slot = _expression_slot(SlotDefinition(name="extra_slots"), extra.range_expression)
+    try:
+        _storage_type(sv, cls, slot)
+    except ValueError as error:
+        raise ValueError(f"{cls.name}.extra_slots: {error}") from error
+    return True
+
+
+def emits_extra_slots(sv: SchemaView, cls: ClassDefinition) -> bool:
+    """Emit local dynamic storage only when actual inheritance supplies none."""
+    _check_ancestry(sv, cls.name)
+    allowed = _allows_extra_slots(sv, cls)
+    ancestors = sv.class_ancestors(cls.name, mixins=False, reflexive=False)
+    inherited = any(_allows_extra_slots(sv, sv.get_class(name, strict=True)) for name in ancestors)
+    return allowed and not inherited
+
+
 def _alternatives(slot: SlotDefinition) -> list[SlotDefinition]:
     """Expand unions while preserving effective outer inlining settings."""
     return [

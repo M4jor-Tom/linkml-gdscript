@@ -42,6 +42,17 @@ in `docs/superpowers/plans/2026-11-12-mapping.md`.
 | `tree_root: true` | Schema metadata, no different Godot base class |
 | `description` | Documentation comments, with literal BBCode escaped |
 
+A locally open `extra_slots` policy emits `linkml_extra_slots: Dictionary[String,
+Variant]` unless an actual `is_a` ancestor already owns that storage. Mixins do
+not pass permission to consumers. Descendants inherit physical storage even when
+their local policy is closed; external validation must still enforce each class's
+local policy. Applications route fixed names and aliases to `slot_*` fields and
+preserve dynamic names as raw string keys in `linkml_extra_slots` (including
+Unicode and punctuation); generation does not route or validate assignments.
+`allowed` plus `range_expression` is unsupported. A range expression is checked
+for a resolvable supported value shape, but its constraints are not enforced in
+GDScript; keep the source schema for external validation.
+
 Use induced slots from `SchemaView` so mixins and `slot_usage` are resolved.
 Before suppressing inherited declarations, compare their effective field names,
 value/storage representations and initializers. Reject changed inherited aliases,

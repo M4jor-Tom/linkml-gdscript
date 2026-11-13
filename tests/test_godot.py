@@ -72,6 +72,11 @@ def test_generated_scripts_run_in_godot(sv: SchemaView, tmp_path: Path, engine: 
         },
     )
     schema.enums["Escapes"] = EnumDefinition(name="Escapes", permissible_values={'quote"\\\n': {}})
+    schema.classes["Labels"] = ClassDefinition(
+        name="Labels",
+        attributes={"title": {"range": "string"}},
+        extra_slots={"allowed": True},
+    )
     GDScriptGenerator(schema).serialize(directory=tmp_path)
     (tmp_path / "project.godot").write_text(
         'config_version=5\n[application]\nconfig/name="Mapping acceptance"\n',
@@ -113,6 +118,18 @@ func _initialize() -> void:
     assert(values.slot_escaped == "é \\"hi\\"\\\\\\n\\t")
     assert(values.slot_truth == true and values.slot_number == 1.25)
     assert(LinkMLEscapes.VALUE_QUOTE == "quote\\"\\\\\\n")
+    var labels = LinkMLLabels.new()
+    labels.slot_title = "fixed"
+    labels.linkml_extra_slots["Ω"] = "text"
+    labels.linkml_extra_slots["with-dash"] = [1, 2]
+    labels.linkml_extra_slots["object"] = LinkMLAddress.new()
+    labels.linkml_extra_slots["nested"] = {"values": {"inner": ["x", 3]}}
+    assert(labels.slot_title == "fixed")
+    assert(labels.linkml_extra_slots["Ω"] == "text")
+    assert(labels.linkml_extra_slots["with-dash"] == [1, 2])
+    assert(labels.linkml_extra_slots["object"] is LinkMLAddress)
+    assert(labels.linkml_extra_slots["nested"] == {"values": {"inner": ["x", 3]}})
+    assert(LinkMLLabels.new().linkml_extra_slots.is_empty())
     values.slot_choices.append("text")
     values.slot_choices.append(1)
     assert(values.slot_choices == ["text", 1])

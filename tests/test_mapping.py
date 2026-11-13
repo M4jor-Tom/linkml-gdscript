@@ -83,6 +83,137 @@ def schema_view(**elements: object) -> SchemaView:
     )
 
 
+def test_dynamic_map_has_storage() -> None:
+    """Named attributes and dynamic data are both representable."""
+    sv = schema_view(
+        classes={
+            "Labels": {
+                "attributes": {"title": {"range": "string"}},
+                "extra_slots": {"range_expression": {"range": "string"}},
+            }
+        }
+    )
+    source = GDScriptGenerator(sv.schema).render()["link_ml_labels.gd"]
+    assert "var slot_title: Variant = null" in source
+    assert "var linkml_extra_slots: Dictionary[String, Variant] = {}" in source
+
+
+@pytest.mark.parametrize(
+    "extra, expected",
+    [
+        (None, False),
+        ({}, False),
+        ({"allowed": True}, True),
+        ({"allowed": False}, False),
+        ({"allowed": None}, False),
+        ({"range_expression": {"range": "string"}}, True),
+        ({"range_expression": {"multivalued": True, "range": "integer"}}, True),
+        ({"range_expression": {"any_of": [{"range": "string"}, {"range": "integer"}]}}, True),
+    ],
+)
+def test_extra_slots_local_policy(extra: dict | None, expected: bool) -> None:
+    """Extra storage follows local allowed/range-expression policy."""
+    declaration = {} if extra is None else {"extra_slots": extra}
+    sv = schema_view(classes={"C": declaration})
+    assert mapping.emits_extra_slots(sv, sv.get_class("C")) is expected
+
+
+@pytest.mark.parametrize(
+    "expression, message",
+    [
+        ({"range": "Missing"}, "Missing"),
+        ({"range": "UnknownType"}, "UnknownType"),
+        ({"array": {"exact_number_dimensions": 1}}, "unsupported"),
+        ({"range_expression": {"is_a": "Labels"}}, "unsupported"),
+    ],
+)
+def test_extra_slots_validate_range_expression(expression: dict, message: str) -> None:
+    """Dynamic containers do not permit unresolved or unsupported declarations."""
+    sv = schema_view(classes={"Labels": {"extra_slots": {"range_expression": expression}}})
+    with pytest.raises(ValueError, match=f"Labels\\.extra_slots.*{message}"):
+        GDScriptGenerator(sv.schema).render()
+
+
+def test_extra_slots_empty_expression_requires_effective_range() -> None:
+    """An empty expression resolves normally and cannot invent a range."""
+    sv = schema_view(default_range=None, classes={"C": {"extra_slots": {"range_expression": {}}}})
+    with pytest.raises(ValueError, match="C\\.extra_slots.*None|C\\.extra_slots.*unsupported"):
+        GDScriptGenerator(sv.schema).render()
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_extra_slots_reject_allowed_with_expression(allowed: bool) -> None:
+    """The backend rejects allowed plus range_expression rather than implying a constraint."""
+    sv = schema_view(classes={"Labels": {"extra_slots": {"allowed": allowed, "range_expression": {"range": "string"}}}})
+    with pytest.raises(ValueError, match="Labels\\.extra_slots: allowed plus range_expression is unsupported"):
+        GDScriptGenerator(sv.schema).render()
+
+
+def test_extra_slots_physical_inheritance_is_not_permission() -> None:
+    """Only is_a inherits storage; local closure and mixin permission remain closed."""
+    sv = schema_view(
+        classes={
+            "Open": {"extra_slots": {"allowed": True}},
+            "Closed": {"is_a": "Open"},
+            "Reopened": {"is_a": "Closed", "extra_slots": {"range_expression": {"range": "integer"}}},
+            "OpenMixin": {"mixin": True, "extra_slots": {"allowed": True}},
+            "Consumer": {"mixins": ["OpenMixin"]},
+        }
+    )
+    files = GDScriptGenerator(sv.schema).render()
+    assert files["link_ml_open.gd"].count("var linkml_extra_slots:") == 1
+    assert "linkml_extra_slots" not in files["link_ml_closed.gd"]
+    assert "linkml_extra_slots" not in files["link_ml_reopened.gd"]
+    assert files["link_ml_open_mixin.gd"].count("var linkml_extra_slots:") == 1
+    assert "linkml_extra_slots" not in files["link_ml_consumer.gd"]
+    assert mapping.emits_extra_slots(sv, sv.get_class("Closed")) is False
+    assert mapping.emits_extra_slots(sv, sv.get_class("Reopened")) is False
+
+
+def test_invalid_local_extra_slots_cannot_hide_behind_parent_storage() -> None:
+    """Inherited storage does not excuse an invalid class-local range policy."""
+    sv = schema_view(
+        classes={
+            "Open": {"extra_slots": {"allowed": True}},
+            "Child": {"is_a": "Open", "extra_slots": {"range_expression": {"range": "Missing"}}},
+        }
+    )
+    with pytest.raises(ValueError, match="Child\\.extra_slots.*Missing"):
+        GDScriptGenerator(sv.schema).render()
+
+
+def test_extra_slots_symbol_does_not_collide_with_fixed_field_or_alias() -> None:
+    """The reserved storage name is outside the slot_ fixed-field namespace."""
+    sv = schema_view(
+        classes={
+            "C": {
+                "extra_slots": {"allowed": True},
+                "attributes": {"extras": {"alias": "linkml_extra_slots"}},
+            }
+        }
+    )
+    files = GDScriptGenerator(sv.schema).render()
+    source = next(source for source in files.values() if "class_name LinkMLC" in source)
+    assert "var slot_linkml_extra_slots: Variant = null" in source
+    assert source.count("var linkml_extra_slots:") == 1
+
+
+def test_invalid_extra_slots_do_not_mutate_output(tmp_path) -> None:
+    """Schema failures happen during render before existing or fresh output changes."""
+    invalid = schema_view(classes={"C": {"extra_slots": {"range_expression": {"range": "Missing"}}}})
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    (existing / "sentinel.gd").write_bytes(b"handwritten\\x00bytes")
+    before = {path.name: path.read_bytes() for path in existing.iterdir()}
+    with pytest.raises(ValueError, match="Missing"):
+        GDScriptGenerator(invalid.schema).serialize(directory=existing)
+    assert {path.name: path.read_bytes() for path in existing.iterdir()} == before
+    fresh = tmp_path / "fresh"
+    with pytest.raises(ValueError, match="Missing"):
+        GDScriptGenerator(invalid.schema).serialize(directory=fresh)
+    assert not fresh.exists()
+
+
 def test_kitchen_sink_literal_contract(sv: SchemaView) -> None:
     """Scalar absence and collection elements have independent representations."""
     person = sv.get_class("Person")

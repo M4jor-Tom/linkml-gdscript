@@ -45,6 +45,10 @@ def engine(tmp_path: Path) -> str:
 def test_generated_scripts_run_in_godot(sv: SchemaView, tmp_path: Path, engine: str) -> None:
     """Register global classes, then exercise nullable values, defaults and containers."""
     schema = deepcopy(sv.schema)
+    schema.classes["Choice"] = ClassDefinition(
+        name="Choice",
+        attributes={"value": {"exactly_one_of": [{"range": "integer"}, {"range": "string", "multivalued": True}]}},
+    )
     schema.classes["LiteralValues"] = ClassDefinition(
         name="LiteralValues",
         description="Literal [b]BBCode[/b].\nSecond line.",
@@ -95,6 +99,14 @@ func _initialize() -> void:
     person.slot_aliases.append("alias")
     person.slot_address = LinkMLAddress.new()
     assert(person is LinkMLNamedThing)
+    var choice = LinkMLChoice.new()
+    assert(choice.slot_value == null)
+    choice.slot_value = 0
+    assert(choice.slot_value == 0)
+    choice.slot_value = []
+    assert(choice.slot_value is Array and choice.slot_value.is_empty())
+    choice.slot_value = ["text"]
+    assert(choice.slot_value == ["text"])
     var values = LinkMLLiteralValues.new()
     assert(values.slot_exact == "12345678901234567890.00100")
     assert(values.slot_minimum == -9223372036854775808)

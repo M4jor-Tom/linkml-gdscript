@@ -238,7 +238,50 @@ def test_collection_shapes(key: dict, flags: dict, expected: str) -> None:
 def test_unions(slot: dict, expected: str) -> None:
     """Unions preserve heterogeneous values without inventing static types."""
     sv = schema_view(classes={"C": {"attributes": {"value": slot}}})
-    assert mapping.field_type(sv, sv.get_class("C"), sv.induced_slot("value", "C")) == expected
+    cls = sv.get_class("C")
+    induced = sv.induced_slot("value", "C")
+    assert mapping.field_type(sv, cls, induced) == expected
+    assert mapping.field_default(sv, cls, induced) == ("[]" if slot.get("multivalued") else "null")
+
+
+@pytest.mark.parametrize("operator", ["any_of", "exactly_one_of"])
+@pytest.mark.parametrize("list_branch", [False, True])
+def test_union_without_outer_range(operator: str, list_branch: bool) -> None:
+    """The alternatives provide their own ranges and preserve branch shape."""
+    sv = schema_view(
+        default_range=None,
+        classes={
+            "Choice": {
+                "attributes": {
+                    "value": {
+                        operator: [
+                            {"range": "integer"},
+                            {"range": "string", "multivalued": list_branch},
+                        ]
+                    }
+                }
+            }
+        },
+    )
+    assert sv.schema.default_range is None
+    slot = sv.induced_slot("value", "Choice")
+    assert slot.range is None
+    cls = sv.get_class("Choice")
+    assert mapping.field_type(sv, cls, slot) == "Variant"
+    assert mapping.field_default(sv, cls, slot) == "null"
+
+
+def test_single_list_union_has_null_default_and_rejects_scalar_default() -> None:
+    """List alternatives retain their shape and cannot authorize scalar defaults."""
+    slot_shape = {"exactly_one_of": [{"range": "string", "multivalued": True}]}
+    sv = schema_view(classes={"C": {"attributes": {"value": slot_shape}}})
+    cls = sv.get_class("C")
+    slot = sv.induced_slot("value", "C")
+    assert mapping.field_type(sv, cls, slot) == "Variant"
+    assert mapping.field_default(sv, cls, slot) == "null"
+    defaulted = schema_view(classes={"C": {"attributes": {"value": {**slot_shape, "ifabsent": "string(x)"}}}})
+    with pytest.raises(ValueError, match="C.*value.*incompatible default"):
+        mapping.field_default(defaulted, defaulted.get_class("C"), defaulted.induced_slot("value", "C"))
 
 
 @pytest.mark.parametrize(
@@ -590,6 +633,56 @@ def test_union_base_range_reference_is_validated() -> None:
         GDScriptGenerator(sv.schema).render()
 
 
+def test_union_alternatives_validate_unknown_and_unsupported_shapes() -> None:
+    """Union alternatives cannot hide unresolved ranges or unsupported collection shapes."""
+    cases = [
+        (
+            {"exactly_one_of": [{"range": "string", "multivalued": True}], "multivalued": True},
+            "C.*value.*list alternatives inside collections",
+        ),
+        ({"any_of": [{"range": "Missing", "multivalued": True}]}, "Missing"),
+    ]
+    for slot, message in cases:
+        sv = schema_view(classes={"C": {"attributes": {"value": slot}}})
+        with pytest.raises(ValueError, match=message):
+            GDScriptGenerator(sv.schema).render()
+
+
+def test_nested_union_without_outer_range_is_supported() -> None:
+    """Nested range alternatives resolve without an unrelated outer default range."""
+    sv = schema_view(
+        default_range=None,
+        classes={"C": {"attributes": {"value": {"any_of": [{"any_of": [{"range": "integer"}, {"range": "string"}]}]}}}},
+    )
+    assert mapping.field_type(sv, sv.get_class("C"), sv.induced_slot("value", "C")) == "Variant"
+
+
+def test_union_accepts_inlined_list_class_alternative_and_rejects_keyed_list() -> None:
+    """Object-list alternatives need explicit array storage and reject implicit keys."""
+    classes = {
+        "Item": {"attributes": {"id": {"identifier": True, "range": "string"}}},
+        "Choice": {
+            "attributes": {
+                "value": {
+                    "exactly_one_of": [{"range": "Item", "multivalued": True, "inlined": True, "inlined_as_list": True}]
+                }
+            }
+        },
+    }
+    sv = schema_view(classes=classes)
+    assert mapping.field_type(sv, sv.get_class("Choice"), sv.induced_slot("value", "Choice")) == "Variant"
+    keyed = schema_view(
+        classes={
+            **classes,
+            "Choice": {
+                "attributes": {"value": {"exactly_one_of": [{"range": "Item", "multivalued": True, "inlined": True}]}}
+            },
+        }
+    )
+    with pytest.raises(ValueError, match="Choice.*value.*keyed collection alternatives"):
+        GDScriptGenerator(keyed.schema).render()
+
+
 @pytest.mark.parametrize(
     "range_name, default",
     [
@@ -668,6 +761,26 @@ def test_nested_union_defaults_use_leaf_representations(default: str, expected: 
     )
     source = GDScriptGenerator(sv.schema).render()["link_mlc.gd"]
     assert f"var slot_value: Variant = {expected}\n" in source
+
+
+def test_scalar_list_union_default_matches_only_scalar_leaf() -> None:
+    """A scalar default is accepted when a scalar branch matches despite list branches."""
+    sv = schema_view(
+        classes={
+            "C": {
+                "attributes": {
+                    "value": {
+                        "exactly_one_of": [
+                            {"range": "integer"},
+                            {"range": "string", "multivalued": True},
+                        ],
+                        "ifabsent": "integer(7)",
+                    }
+                }
+            }
+        },
+    )
+    assert "var slot_value: Variant = 7" in GDScriptGenerator(sv.schema).render()["link_mlc.gd"]
 
 
 def test_nested_union_default_rejects_incompatible_leaf_type() -> None:

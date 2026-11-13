@@ -182,11 +182,14 @@ def _value_type(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition, path
         raise ValueError(f"{context}: unsupported range expression or array shape")
     alternatives = _alternatives(slot)
     if alternatives:
-        _value_type(sv, cls, replace(slot, any_of=[], exactly_one_of=[]), path)
+        if slot.range is not None or sv.schema.default_range is not None:
+            _value_type(sv, cls, replace(slot, any_of=[], exactly_one_of=[]), path)
         for alternative in alternatives:
-            _storage_type(sv, cls, alternative, path)
-            if alternative.multivalued:
-                raise ValueError(f"{context}: nested collections are unsupported")
+            alternative_storage = _storage_type(sv, cls, alternative, path)
+            if alternative.multivalued and slot.multivalued:
+                raise ValueError(f"{context}: list alternatives inside collections are unsupported")
+            if alternative.multivalued and alternative_storage.startswith("Dictionary["):
+                raise ValueError(f"{context}: keyed collection alternatives are unsupported")
             if slot.multivalued and _alternatives(alternative):
                 _storage_type(sv, cls, replace(alternative, multivalued=True), path)
             if slot.multivalued and alternative.range in sv.all_classes() and sv.is_inlined(alternative):
@@ -257,6 +260,8 @@ def escape_description(text: str) -> str:
 
 def _leaf_value_types(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> set[str]:
     """Resolve default compatibility through nested unions to actual value representations."""
+    if slot.multivalued:
+        return set()
     alternatives = _alternatives(slot)
     if not alternatives:
         return {_value_type(sv, cls, slot)}

@@ -39,16 +39,18 @@ mapping calls. Ordinary unresolved references must still fail.
 
 ### Acceptance
 
-- [ ] Both operators work with valid scalar alternatives and no outer/default
-      range, preserving the current nullable `Variant` contract.
-- [ ] Referenced alternatives are still checked: unknown/cyclic types and
-      unsupported shapes cannot hide behind `Variant`.
-- [ ] Explicit enclosing ranges and supported nested-union/default/constraint
-      cases retain their intended checks; do not fix this by skipping all checks.
-- [ ] A small imported-schema case proves entry-level defaults do not accidentally
-      decide whether a fully specified union works.
-- [ ] CLI generation and a headless Godot assignment check pass for the new
-      supported case. Permanent tests include the failure oracle above.
+- [x] Both operators work with valid scalar alternatives and no outer/default
+      range, preserving the current nullable `Variant` contract (`test_union_without_outer_range`).
+- [x] Referenced alternatives are still checked: missing alternatives, outer ranges,
+      and unsupported shapes remain covered (`test_union_alternatives_validate_unknown_and_unsupported_shapes`,
+      `test_union_base_range_reference_is_validated`).
+- [x] Explicit enclosing ranges and supported nested-union/default/constraint
+      cases retain their intended checks (`test_nested_union_without_outer_range`,
+      `test_constraints_preserve_enclosing_union`, and union default regressions).
+- [x] Imported CLI generation has no entry `default_range`; a missing imported branch
+      fails before output creation (`test_cli_imported_union_without_entry_default_range`).
+- [x] Current Godot 4.7.2 and floor Godot 4.5 parse and execute generated `Choice`
+      assignments; regression suite prints `MAPPING_RUNTIME_OK`.
 
 ## R03 — Scalar-or-list alternatives are rejected as nested collections
 
@@ -83,14 +85,14 @@ Fixing R02 alone does not add support for these alternatives.
 
 ### Required disposition and acceptance
 
-- [ ] Retain the supported-subset restriction **or** obtain approval to support
-      scalar/list unions. Do not flatten a list into text, invent a default,
-      wrap a scalar in a singleton list or rewrite a consumer schema silently.
-- [ ] If retaining it: add/reuse a regression for this exact shape and the
-      single-list `exactly_one_of` case; document branch-local `multivalued`
-      restrictions in `docs/MAPPING.md`, with an accurate slot-specific diagnostic.
-- [ ] If extending it: define storage and missing/empty/scalar/list semantics;
-      exercise scalar and list assignment in Godot and preserve nested-collection,
-      keyed-union and invalid-reference rejection where still unsupported.
-- [ ] Record the chosen existing/new contract and passing evidence in the README.
-      Neither this item's closure nor R02 establishes full LinkML validation.
+- [x] Extended scalar-position unions to preserve list alternatives as values inside
+      `Variant`; empty/default semantics remain `null`, with no implicit wrapping or flattening.
+- [x] `test_union_without_outer_range` covers scalar/list alternatives for both
+      operators; `test_single_list_union_has_null_default_and_rejects_scalar_default`
+      checks the list-only case and default mismatch. `docs/MAPPING.md` records the boundary.
+- [x] Outer multivalued list alternatives and keyed class-list alternatives remain
+      rejected contextually; inlined class lists with `inlined_as_list` are accepted.
+      Missing types remain rejected by the ordinary type resolver.
+- [x] Engine tests assign null, integer, empty array and string array to a generated
+      `LinkMLChoice`; both engine shells passed without script/parse errors.
+- [x] R02/R03 evidence and exact acceptance commands are recorded in the review README.

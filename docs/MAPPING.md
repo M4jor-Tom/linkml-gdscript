@@ -81,14 +81,22 @@ as `T`. Inlined multivalued classes with an identifier or key use
 `Dictionary[K, T] = {}` unless `inlined_as_list` is true. Unkeyed inline classes
 use arrays. Empty collection defaults intentionally collapse absent and empty.
 Nested typed collections are not emitted (GDScript does not support them).
-Range unions (`any_of`, `exactly_one_of`) use Variant elements; reject ambiguous
-keyed-union storage rather than inventing keys or converting references silently.
-Slot `union_of` references other slots, not range types, and is explicitly rejected
-as unsupported slot composition. `all_of` and `none_of` remain external constraints
-on the existing effective range, preserving enclosing union storage under compatible
-constraints: their references are checked, and branches that change storage
-representation are rejected. `range_expression`, inline `enum_range` and `array`
-expressions are explicitly unsupported structural shapes.
+Range unions (`any_of`, `exactly_one_of`) use `Variant` in scalar positions and
+`Array[Variant] = []` for outer multivalued scalar unions. Branch-local
+`multivalued` alternatives preserve their array shape inside a scalar `Variant`,
+including a single list alternative; list alternatives inside an outer multivalued
+union and keyed class-list alternatives are rejected. Inlined class-list
+alternatives with `inlined_as_list: true` are supported. Unions resolve every
+alternative even without an outer or schema `default_range`; an explicit outer
+range is still validated. Literal defaults must match a scalar union leaf, and a
+list alternative's element type does not authorize a scalar default. Reject
+ambiguous keyed-union storage rather than inventing keys or converting references
+silently. Slot `union_of` references other slots, not range types, and is explicitly
+rejected as unsupported slot composition. `all_of` and `none_of` remain external
+constraints on the existing effective range, preserving enclosing union storage
+under compatible constraints: their references are checked, and branches that
+change storage representation are rejected. `range_expression`, inline `enum_range`
+and `array` expressions are explicitly unsupported structural shapes.
 
 Use `SchemaView.is_inlined(slot)` for effective inlining. In the installed
 LinkML runtime, an ordinary external reference requires an **identifier**;

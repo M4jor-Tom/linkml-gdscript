@@ -70,3 +70,44 @@ def test_cli_help():
     result = CliRunner().invoke(cli, ["--help"])
     assert result.exit_code == 0
     assert "--output-directory" in result.output
+
+
+def test_cli_imported_union_without_entry_default_range(tmp_path):
+    """Imported alternatives generate Variant before creating output on failure."""
+    choices = tmp_path / "choices.yaml"
+    choices.write_text(
+        """id: https://example.org/choices
+name: choices
+prefixes:
+  linkml: https://w3id.org/linkml/
+classes:
+  Choice:
+    attributes:
+      value:
+        any_of:
+          - range: integer
+          - range: string
+""",
+        encoding="utf-8",
+    )
+    entry = tmp_path / "entry.yaml"
+    entry.write_text(
+        """id: https://example.org/entry
+name: entry
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports: [linkml:types, choices]
+""",
+        encoding="utf-8",
+    )
+    out = tmp_path / "generated"
+    result = CliRunner().invoke(cli, [str(entry), "-d", str(out)])
+    assert result.exit_code == 0, result.output
+    assert any("var slot_value: Variant = null" in path.read_text(encoding="utf-8") for path in out.glob("*.gd"))
+
+    choices.write_text(choices.read_text(encoding="utf-8").replace("range: string", "range: Missing"), encoding="utf-8")
+    failed_out = tmp_path / "failed"
+    failure = CliRunner().invoke(cli, [str(entry), "-d", str(failed_out)])
+    assert failure.exit_code != 0
+    assert "Missing" in str(failure.exception)
+    assert not failed_out.exists()

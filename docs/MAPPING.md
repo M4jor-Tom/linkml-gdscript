@@ -20,7 +20,12 @@ in `docs/superpowers/plans/2026-11-12-mapping.md`.
   avoid native Godot class/member/keyword collisions without depending on a
   running Godot installation or a maintained built-in blacklist.
 - Slot `alias` takes precedence over the original slot name.
-- Names are normalized to ASCII identifiers. Punctuation separates words;
+- Class and slot names are normalized to ASCII identifiers. Enum constants
+  preserve existing ASCII normalization; permissible values containing any
+  non-ASCII character use `VALUE__` plus uppercase `U`-prefixed code points
+  joined by underscores (for example, `Ω` becomes `VALUE__U03A9`). Stored values
+  remain unchanged. This intentional generated-API migration does not
+  transliterate, normalize, or hash Unicode values. Punctuation separates words;
   leading digits are safe behind the prefixes. Names with no usable characters
   are rejected rather than silently assigned a meaningless identifier.
 - Output filenames are snake_case with `.gd`.
@@ -181,5 +186,7 @@ jobs. Missing Godot fails the integration test.
 
 The templates additionally call `mapping.string_literal(text)` for safe source
 literals and `mapping.escape_description(text)` before the existing `doc_comment`
-filter. The test-only naive mapper deliberately reuses these two helpers; the
-nine public mapping entry points and generator contexts remain unchanged.
+filter. The class template also consumes `emits_extra_slots` to emit dynamic
+storage when policy allows. The test-only naive mapper deliberately reuses the
+literal helpers; the nine public mapping entry points and generator contexts
+remain unchanged.

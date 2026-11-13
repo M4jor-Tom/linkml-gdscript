@@ -45,6 +45,35 @@ def test_field_defaults_are_expressions_or_none(sv):
         assert default is None or default.strip()
 
 
+@pytest.mark.parametrize(
+    "text, symbol",
+    [
+        ("Ω", "VALUE__U03A9"),
+        ("café", "VALUE__U0063_U0061_U0066_U00E9"),
+        ("😀", "VALUE__U1F600"),
+        ("U03A9", "VALUE_U03_A9"),
+        ("in progress", "VALUE_IN_PROGRESS"),
+        ("é", "VALUE__U00E9"),
+        ("e\u0301", "VALUE__U0065_U0301"),
+        ("mixΩ", "VALUE__U006D_U0069_U0078_U03A9"),
+    ],
+)
+def test_enum_symbols_preserve_unicode(text: str, symbol: str) -> None:
+    """Generated ASCII names do not change the permissible value."""
+    sv = schema_view(enums={"Codes": {"permissible_values": {text: {}}}})
+    source = GDScriptGenerator(sv.schema).render()["link_ml_codes.gd"]
+    assert f"const {symbol}: String = {mapping.string_literal(text)}" in source
+
+
+def test_unicode_enum_names_do_not_depend_on_order() -> None:
+    """Unicode symbols remain value-derived when values are reordered."""
+    first = GDScriptGenerator(schema_view(enums={"Codes": {"permissible_values": {"Ω": {}, "U03A9": {}}}}).schema)
+    second = GDScriptGenerator(schema_view(enums={"Codes": {"permissible_values": {"U03A9": {}, "Ω": {}}}}).schema)
+    symbols = ("VALUE__U03A9", "VALUE_U03_A9")
+    assert all(f"const {symbol}: String" in first.render()["link_ml_codes.gd"] for symbol in symbols)
+    assert all(f"const {symbol}: String" in second.render()["link_ml_codes.gd"] for symbol in symbols)
+
+
 def test_enum_names_are_identifiers(sv):
     assert all(mapping.enum_name(sv, enum).isidentifier() for enum in sv.all_enums().values())
 

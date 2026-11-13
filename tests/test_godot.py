@@ -72,6 +72,7 @@ def test_generated_scripts_run_in_godot(sv: SchemaView, tmp_path: Path, engine: 
         },
     )
     schema.enums["Escapes"] = EnumDefinition(name="Escapes", permissible_values={'quote"\\\n': {}})
+    schema.enums["Unicode"] = EnumDefinition(name="Unicode", permissible_values={"Ω": {}, "café": {}, "😀": {}})
     schema.classes["Labels"] = ClassDefinition(
         name="Labels",
         attributes={"title": {"range": "string"}},
@@ -118,6 +119,9 @@ func _initialize() -> void:
     assert(values.slot_escaped == "é \\"hi\\"\\\\\\n\\t")
     assert(values.slot_truth == true and values.slot_number == 1.25)
     assert(LinkMLEscapes.VALUE_QUOTE == "quote\\"\\\\\\n")
+    assert(LinkMLUnicode.VALUE__U03A9 == "Ω")
+    assert(LinkMLUnicode.VALUE__U0063_U0061_U0066_U00E9 == "café")
+    assert(LinkMLUnicode.VALUE__U1F600 == "😀")
     var labels = LinkMLLabels.new()
     labels.slot_title = "fixed"
     labels.linkml_extra_slots["Ω"] = "text"

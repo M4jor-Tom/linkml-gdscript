@@ -366,15 +366,22 @@ def enum_name(sv: SchemaView, enum: EnumDefinition) -> str:
     return _global_name(sv, enum.name)
 
 
+def _enum_symbol(text: str) -> str:
+    """Keep ASCII conventions; encode non-ASCII values without transliteration."""
+    if not text.isascii():
+        return "VALUE__" + "_".join(f"U{ord(char):04X}" for char in text)
+    return "VALUE_" + "_".join(_words(text)).upper()
+
+
 def enum_member_name(sv: SchemaView, enum: EnumDefinition, value: PermissibleValue) -> str:
     """Name string constants and reject collisions within their enum host."""
     names: dict[str, str] = {}
     for member in enum.permissible_values.values():
-        name = "VALUE_" + "_".join(_words(member.text)).upper()
+        name = _enum_symbol(member.text)
         if name in names:
             raise ValueError(f"{enum.name}: enum values {names[name]!r} and {member.text!r} map to {name}")
         names[name] = member.text
-    return "VALUE_" + "_".join(_words(value.text)).upper()
+    return _enum_symbol(value.text)
 
 
 def file_name(gdscript_class_name: str) -> str:

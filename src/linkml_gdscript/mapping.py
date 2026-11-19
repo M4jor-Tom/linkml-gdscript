@@ -109,8 +109,9 @@ def base_class(sv: SchemaView, cls: ClassDefinition) -> str:
 
 
 def _field_name(slot: SlotDefinition) -> str:
-    """Use an alias in preference to the original slot name."""
-    return "slot_" + "_".join(_words(slot.alias or slot.name)).lower()
+    """Use an alias in preference to the slot name, unless it has no ASCII identifier characters."""
+    alias = slot.alias if slot.alias and re.search(r"[A-Za-z0-9]", slot.alias) else None
+    return "slot_" + "_".join(_words(alias or slot.name)).lower()
 
 
 def field_name(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
@@ -180,6 +181,25 @@ def _leaf_fits(
     )
 
 
+def _collection_fits(
+    sv: SchemaView,
+    before: SlotDefinition,
+    cls: ClassDefinition,
+    after: SlotDefinition,
+    storage: str,
+) -> bool:
+    """Accept inline collections narrowed to an actual is_a subtype within the parent's container."""
+    classes = sv.all_classes()
+    return (
+        before.range in classes
+        and after.range in classes
+        and sv.is_inlined(before)
+        and sv.is_inlined(after)
+        and before.range in sv.class_ancestors(after.range, mixins=False)
+        and _storage_type(sv, cls, replace(after, range=before.range)) == storage
+    )
+
+
 def _storage_leaves(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> set[tuple[str, frozenset]]:
     """Flatten scalar unions, retaining collection hints and their nested leaf representations."""
     alternatives = _alternatives(slot)
@@ -203,6 +223,8 @@ def _inherited_compatible(
         return False
     if old == new and _storage_leaves(sv, parent, before) == _storage_leaves(sv, cls, after):
         return True
+    if before.multivalued and after.multivalued:
+        return _collection_fits(sv, before, cls, after, old)
     if before.multivalued or after.multivalued:
         return False
     return all(any(_leaf_fits(sv, parent, p, cls, c) for p in _scalar_leaves(before)) for c in _scalar_leaves(after))
@@ -297,12 +319,18 @@ def _alternatives(slot: SlotDefinition) -> list[SlotDefinition]:
     ]
 
 
+def _conditions_only(expression: object) -> bool:
+    """A range class expression that only constrains member slots keeps the outer storage."""
+    keys = ("is_a", "any_of", "all_of", "exactly_one_of", "none_of")
+    return expression is None or not any(getattr(expression, key, None) for key in keys)
+
+
 def _value_type(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition, path: tuple[str, ...] = ()) -> str:
     """Resolve actual value representation independently of scalar nullability."""
     context = f"{cls.name}.{slot.name}"
     if slot.union_of:
         raise ValueError(f"{context}: unsupported slot union_of composition")
-    if slot.range_expression or slot.enum_range or slot.array:
+    if not _conditions_only(slot.range_expression) or slot.enum_range or slot.array:
         raise ValueError(f"{context}: unsupported range expression or array shape")
     alternatives = _alternatives(slot)
     if alternatives:

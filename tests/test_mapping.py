@@ -1223,10 +1223,6 @@ def test_inherited_union_to_reference_preserves_identifier_representation() -> N
             {"range": "Item", "inlined": True, "multivalued": True},
             {"range": "Item", "inlined_as_list": True, "multivalued": True},
         ),
-        (
-            {"range": "Item", "inlined_as_list": True, "multivalued": True},
-            {"range": "Special", "inlined_as_list": True, "multivalued": True},
-        ),
         ({"any_of": [{"range": "string", "multivalued": True}]}, {"range": "string"}),
         ({"any_of": [{"range": "integer"}, {"range": "string"}]}, {"range": "boolean"}),
     ],
@@ -1339,3 +1335,97 @@ def test_inherited_alias_rejects_nested_list_union_to_scalar(operator: str) -> N
     for operation in (mapping.class_slots, mapping.field_aliases):
         with pytest.raises(ValueError, match="Child.value: incompatible inherited storage"):
             operation(sv, sv.get_class("Child"))
+
+
+def test_condition_only_range_expression_keeps_outer_storage() -> None:
+    """Member slot conditions constrain values externally without changing storage."""
+    sv = schema_view(
+        classes={
+            "Pack": {"attributes": {"tier": {"range": "integer"}}},
+            "Camp": {
+                "attributes": {
+                    "packs": {
+                        "range": "Pack",
+                        "multivalued": True,
+                        "inlined_as_list": True,
+                        "range_expression": {"slot_conditions": {"tier": {"equals_number": 1}}},
+                    },
+                    "boss": {
+                        "range": "Pack",
+                        "inlined": True,
+                        "range_expression": {"slot_conditions": {"tier": {"equals_number": 1}}},
+                    },
+                }
+            },
+        }
+    )
+    source = GDScriptGenerator(sv.schema).render()["link_ml_camp.gd"]
+    assert "var slot_packs: Array[LinkMLPack] = []" in source
+    assert "var slot_boss: LinkMLPack = null" in source
+
+
+@pytest.mark.parametrize("key", ["any_of", "all_of", "exactly_one_of", "none_of"])
+def test_range_expression_class_composition_stays_unsupported(key: str) -> None:
+    """Only member conditions are accepted; class composition still fails explicitly."""
+    sv = schema_view(
+        classes={
+            "Pack": {},
+            "C": {
+                "attributes": {
+                    "value": {"range": "Pack", "inlined": True, "range_expression": {key: [{"is_a": "Pack"}]}}
+                }
+            },
+        }
+    )
+    with pytest.raises(ValueError, match="C.*value.*unsupported"):
+        GDScriptGenerator(sv.schema).render()
+
+
+@pytest.mark.parametrize("inlined_as_list", [True, False])
+def test_inherited_inline_collection_narrows_to_subtype(inlined_as_list: bool) -> None:
+    """A collection may narrow to an actual is_a subtype; the parent container hint is kept."""
+    sv = schema_view(
+        classes={
+            "Room": {"attributes": {"id": {"identifier": True}}},
+            "PopulatedRoom": {"is_a": "Room"},
+            "Base": {
+                "attributes": {
+                    "rooms": {"range": "Room", "multivalued": True, "inlined": True, "inlined_as_list": inlined_as_list}
+                }
+            },
+            "Child": {"is_a": "Base", "slot_usage": {"rooms": {"range": "PopulatedRoom"}}},
+            "Aliased": {"is_a": "Base", "slot_usage": {"rooms": {"range": "PopulatedRoom", "alias": "populated"}}},
+        }
+    )
+    hint = "Array[LinkMLRoom]" if inlined_as_list else "Dictionary[String, LinkMLRoom]"
+    assert mapping.class_slots(sv, sv.get_class("Child")) == []
+    assert mapping.field_aliases(sv, sv.get_class("Aliased")) == [("slot_populated", "slot_rooms", hint)]
+    assert f"var slot_rooms: {hint} = " in GDScriptGenerator(sv.schema).render()["link_ml_base.gd"]
+
+
+@pytest.mark.parametrize("mixin", [True, False])
+def test_inherited_inline_collection_rejects_non_subtype(mixin: bool) -> None:
+    """Mixins and unrelated classes do not narrow collection storage."""
+    sv = schema_view(
+        classes={
+            "Room": {"mixin": mixin},
+            "Other": {"mixins": ["Room"]} if mixin else {},
+            "Base": {"attributes": {"rooms": {"range": "Room", "multivalued": True, "inlined_as_list": True}}},
+            "Child": {"is_a": "Base", "slot_usage": {"rooms": {"range": "Other"}}},
+        }
+    )
+    with pytest.raises(ValueError, match="Child.rooms: incompatible inherited storage"):
+        mapping.class_slots(sv, sv.get_class("Child"))
+
+
+def test_non_ascii_alias_falls_back_to_slot_name() -> None:
+    """An alias with no ASCII identifier characters keeps the slot name as field name."""
+    sv = schema_view(classes={"Ambient": {"attributes": {"omega": {"alias": "Ω", "multivalued": True}}}})
+    source = GDScriptGenerator(sv.schema).render()["link_ml_ambient.gd"]
+    assert "var slot_omega: Array[String] = []" in source
+
+
+def test_non_ascii_alias_fallback_still_checks_collisions() -> None:
+    sv = schema_view(classes={"C": {"attributes": {"omega": {"alias": "Ω"}, "other": {"alias": "omega"}}}})
+    with pytest.raises(ValueError, match="map to slot_omega"):
+        GDScriptGenerator(sv.schema).render()

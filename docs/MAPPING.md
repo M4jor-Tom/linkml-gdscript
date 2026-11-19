@@ -19,7 +19,9 @@ explicit limits; the source schema remains authoritative for validation.
   snake_case; enum constants use `VALUE_` plus UPPER_SNAKE_CASE. Fixed prefixes
   avoid native Godot class/member/keyword collisions without depending on a
   running Godot installation or a maintained built-in blacklist.
-- Slot `alias` takes precedence over the original slot name. A new inherited alias
+- Slot `alias` takes precedence over the original slot name, unless the alias has
+  no ASCII letter or digit (for example `Ω`): the field then uses the slot name, and
+  the alias remains the data key for loaders. A new inherited alias
   forwards to the original storage property; earlier exposed names stay available.
   Reusing an ancestor name for the same logical slot emits no new property.
 - Class and slot names are normalized to ASCII identifiers. Enum constants
@@ -71,12 +73,13 @@ container, independently initialized per instance. All still-exposed ancestor
 names participate in collision checks, even when current induced aliases differ.
 
 Allow equal representations and bounded scalar refinements: supported union
-alternatives may narrow to compatible scalar leaves, and inline objects may narrow
-to actual `is_a` subtypes. Keep the broader physical hint for aliases rather than
+alternatives may narrow to compatible scalar leaves, and inline objects and inline
+collections may narrow to actual `is_a` subtypes; a narrowed collection keeps the
+parent's container and element hint, which accepts subtype instances. Keep the broader physical hint for aliases rather than
 filtering values assigned through base references. For example, an inherited
 `species` aliased to `race` forwards `slot_race` to `slot_species`; nullable values
 stay null until assigned. Reject changed defaults, primitive representations,
-scalar/container shapes, keyed storage or typed collection element hints with a
+scalar/container shapes, keyed storage or non-subtype collection element hints with a
 class/slot-specific error. A mixin does not create Godot subtype identity.
 
 These checks establish representation compatibility, not full logical implication
@@ -131,8 +134,11 @@ silently. Slot `union_of` references other slots, not range types, and is explic
 rejected as unsupported slot composition. `all_of` and `none_of` remain external
 constraints on the existing effective range, preserving enclosing union storage
 under compatible constraints: their references are checked, and branches that
-change storage representation are rejected. `range_expression`, inline `enum_range`
-and `array` expressions are explicitly unsupported structural shapes.
+change storage representation are rejected. A slot `range_expression` holding only
+`slot_conditions` constrains the range's member slots: storage follows the outer
+slot and the conditions stay external. A `range_expression` with `is_a` or boolean
+class composition, inline `enum_range` and `array` expressions are explicitly
+unsupported structural shapes.
 
 Use `SchemaView.is_inlined(slot)` for effective inlining. In the installed
 LinkML runtime, an ordinary external reference requires an **identifier**;

@@ -106,6 +106,7 @@ represented, including missing parents or cycles introduced by effective
 | inlined class | Generated object type |
 | non-inlined class | Identifier's value representation, not an object lookup |
 | `any_of`, `exactly_one_of` | `Variant`; range alternatives are externally validated |
+| fixed-dimension `array` | `Array[T]`, or one nested level such as `Array[PackedFloat64Array]` |
 | omitted range | Induced `default_range` |
 
 All scalar **value** declarations use `Variant`, including required values and
@@ -137,8 +138,14 @@ under compatible constraints: their references are checked, and branches that
 change storage representation are rejected. A slot `range_expression` holding only
 `slot_conditions` constrains the range's member slots: storage follows the outer
 slot and the conditions stay external. A `range_expression` with `is_a` or boolean
-class composition, inline `enum_range` and `array` expressions are explicitly
-unsupported structural shapes.
+class composition and inline `enum_range` are explicitly unsupported structural
+shapes. A slot `array` with a fixed dimension count (`exact_number_dimensions` or
+the length of `dimensions`) maps to `Array[T]` for one dimension and to
+`Array[PackedFloat64Array]`, `Array[PackedInt64Array]` or `Array[PackedStringArray]`
+for two dimensions of floats, integers or strings; other two-dimensional and all
+deeper arrays use `Array[Array]`, because GDScript has no nested typed collections.
+Dimension sizes and inner element types stay external. Variable dimension counts,
+`array` plus `multivalued` and `array` defaults are rejected.
 
 Use `SchemaView.is_inlined(slot)` for effective inlining. In the installed
 LinkML runtime, an ordinary external reference requires an **identifier**;

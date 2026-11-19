@@ -153,7 +153,7 @@ def _storage_owner(
 
 def _scalar_leaves(slot: SlotDefinition) -> list[SlotDefinition]:
     """Keep leaf slot flags so collection alternatives cannot masquerade as scalars."""
-    if slot.multivalued:
+    if _is_collection(slot):
         return [slot]
     alternatives = _alternatives(slot)
     return [leaf for branch in alternatives for leaf in _scalar_leaves(branch)] if alternatives else [slot]
@@ -167,7 +167,7 @@ def _leaf_fits(
     after: SlotDefinition,
 ) -> bool:
     """Accept equal value representations or actual inline scalar subtypes."""
-    if before.multivalued or after.multivalued:
+    if _is_collection(before) or _is_collection(after):
         return False
     if _storage_type(sv, parent, before) == _storage_type(sv, cls, after):
         return True
@@ -225,7 +225,7 @@ def _inherited_compatible(
         return True
     if before.multivalued and after.multivalued:
         return _collection_fits(sv, before, cls, after, old)
-    if before.multivalued or after.multivalued:
+    if _is_collection(before) or _is_collection(after):
         return False
     return all(any(_leaf_fits(sv, parent, p, cls, c) for p in _scalar_leaves(before)) for c in _scalar_leaves(after))
 
@@ -314,7 +314,7 @@ def emits_extra_slots(sv: SchemaView, cls: ClassDefinition) -> bool:
 def _alternatives(slot: SlotDefinition) -> list[SlotDefinition]:
     """Expand unions while preserving effective outer inlining settings."""
     return [
-        _expression_slot(replace(slot, any_of=[], exactly_one_of=[], multivalued=False), expression)
+        _expression_slot(replace(slot, any_of=[], exactly_one_of=[], multivalued=False, array=None), expression)
         for expression in [*slot.any_of, *slot.exactly_one_of]
     ]
 
@@ -330,7 +330,7 @@ def _value_type(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition, path
     context = f"{cls.name}.{slot.name}"
     if slot.union_of:
         raise ValueError(f"{context}: unsupported slot union_of composition")
-    if not _conditions_only(slot.range_expression) or slot.enum_range or slot.array:
+    if not _conditions_only(slot.range_expression) or slot.enum_range:
         raise ValueError(f"{context}: unsupported range expression or array shape")
     alternatives = _alternatives(slot)
     if alternatives:
@@ -368,10 +368,34 @@ def _value_type(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition, path
     return _PRIMITIVES[_primitive(sv, name)]
 
 
+_PACKED = {"float": "PackedFloat64Array", "int": "PackedInt64Array", "String": "PackedStringArray"}
+
+
+def _array_storage(cls: ClassDefinition, slot: SlotDefinition, value: str) -> str:
+    """Nest fixed-dimension arrays one typed level; GDScript has no nested typed collections."""
+    array = slot.array
+    count = len(array.dimensions) if array.dimensions else None
+    exact = array.exact_number_dimensions
+    if slot.multivalued or array.minimum_number_dimensions or array.maximum_number_dimensions:
+        raise ValueError(f"{cls.name}.{slot.name}: unsupported multivalued or variable-dimension array")
+    if exact is not None and count is not None and exact != count:
+        raise ValueError(f"{cls.name}.{slot.name}: unsupported array dimension count mismatch")
+    count = exact if exact is not None else count
+    if not count:
+        raise ValueError(f"{cls.name}.{slot.name}: unsupported array without a fixed dimension count")
+    if count == 1:
+        return f"Array[{value}]"
+    return f"Array[{_PACKED.get(value, 'Array') if count == 2 else 'Array'}]"
+
+
+def _is_collection(slot: SlotDefinition) -> bool:
+    return bool(slot.multivalued or slot.array)
+
+
 def _storage_type(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition, path: tuple[str, ...] = ()) -> str:
     """Map collections and their keys without erasing scalar representation."""
     value = _value_type(sv, cls, slot, path)
-    storage = f"Array[{value}]" if slot.multivalued else value
+    storage = _array_storage(cls, slot, value) if slot.array else f"Array[{value}]" if slot.multivalued else value
     if (
         slot.multivalued
         and value != "Variant"
@@ -412,7 +436,7 @@ def escape_description(text: str) -> str:
 
 def _leaf_value_types(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> set[str]:
     """Resolve default compatibility through nested unions to actual value representations."""
-    if slot.multivalued:
+    if _is_collection(slot):
         return set()
     alternatives = _alternatives(slot)
     if not alternatives:
@@ -424,10 +448,10 @@ def field_default(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) ->
     """Emit checked literal defaults, null scalars, or empty collections."""
     storage = _storage_type(sv, cls, slot)
     if slot.ifabsent is None:
-        return "{}" if storage.startswith("Dictionary[") else "[]" if slot.multivalued else "null"
+        return "{}" if storage.startswith("Dictionary[") else "[]" if _is_collection(slot) else "null"
     context = f"{cls.name}.{slot.name}"
     match = re.fullmatch(r"([A-Za-z_][A-Za-z_0-9]*)\((.*)\)", str(slot.ifabsent), re.DOTALL)
-    if not match or slot.multivalued or storage.startswith("LinkML"):
+    if not match or _is_collection(slot) or storage.startswith("LinkML"):
         raise ValueError(f"{context}: unsupported literal default {slot.ifabsent!r}")
     kind, text = match.groups()
     if text.lstrip().startswith(('"', "'")) or text.strip() in {

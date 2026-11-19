@@ -152,7 +152,7 @@ def test_extra_slots_local_policy(extra: dict | None, expected: bool) -> None:
     [
         ({"range": "Missing"}, "Missing"),
         ({"range": "UnknownType"}, "UnknownType"),
-        ({"array": {"exact_number_dimensions": 1}}, "unsupported"),
+        ({"array": {"minimum_number_dimensions": 1}}, "unsupported"),
         ({"range_expression": {"is_a": "Labels"}}, "unsupported"),
     ],
 )
@@ -693,7 +693,7 @@ def test_inherited_union_representation_conflict() -> None:
     [
         {"range_expression": {"is_a": "C"}},
         {"enum_range": {"permissible_values": {"x": {}}}},
-        {"array": {"exact_number_dimensions": 2}},
+        {"array": {"maximum_number_dimensions": 3}},
     ],
 )
 def test_unsupported_structural_expressions(shape: dict) -> None:
@@ -1429,3 +1429,48 @@ def test_non_ascii_alias_fallback_still_checks_collisions() -> None:
     sv = schema_view(classes={"C": {"attributes": {"omega": {"alias": "Ω"}, "other": {"alias": "omega"}}}})
     with pytest.raises(ValueError, match="map to slot_omega"):
         GDScriptGenerator(sv.schema).render()
+
+
+@pytest.mark.parametrize(
+    "range_name, array, hint",
+    [
+        ("double", {"exact_number_dimensions": 1}, "Array[float]"),
+        ("double", {"dimensions": [{"minimum_cardinality": 1}, {"exact_cardinality": 4}]}, "Array[PackedFloat64Array]"),
+        ("integer", {"exact_number_dimensions": 2}, "Array[PackedInt64Array]"),
+        ("string", {"exact_number_dimensions": 2}, "Array[PackedStringArray]"),
+        ("boolean", {"exact_number_dimensions": 2}, "Array[Array]"),
+        ("double", {"exact_number_dimensions": 3}, "Array[Array]"),
+    ],
+)
+def test_fixed_dimension_arrays_map_to_nested_storage(range_name: str, array: dict, hint: str) -> None:
+    """Fixed-dimension arrays nest one level; sizes and deeper element types stay external."""
+    sv = schema_view(classes={"Grid": {"attributes": {"cells": {"range": range_name, "array": array}}}})
+    assert f"var slot_cells: {hint} = []" in GDScriptGenerator(sv.schema).render()["link_ml_grid.gd"]
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        {"array": {"minimum_number_dimensions": 1}},
+        {"array": {"exact_number_dimensions": 3, "dimensions": [{"exact_cardinality": 2}, {"exact_cardinality": 2}]}},
+        {"array": {"exact_number_dimensions": 1}, "multivalued": True},
+        {"array": {"exact_number_dimensions": 1}, "ifabsent": "float(1.0)"},
+    ],
+)
+def test_ambiguous_arrays_rejected(shape: dict) -> None:
+    """Variable dimension counts, multivalued arrays and array defaults fail explicitly."""
+    sv = schema_view(classes={"Grid": {"attributes": {"cells": {"range": "float", **shape}}}})
+    with pytest.raises(ValueError, match="Grid.cells"):
+        GDScriptGenerator(sv.schema).render()
+
+
+def test_array_alias_forwards_to_nested_storage() -> None:
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"cells": {"range": "double", "array": {"exact_number_dimensions": 2}}}},
+            "Child": {"is_a": "Base", "slot_usage": {"cells": {"alias": "grid"}}},
+        }
+    )
+    assert mapping.field_aliases(sv, sv.get_class("Child")) == [
+        ("slot_grid", "slot_cells", "Array[PackedFloat64Array]")
+    ]

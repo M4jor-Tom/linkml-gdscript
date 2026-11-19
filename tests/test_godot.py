@@ -84,6 +84,15 @@ def test_generated_scripts_run_in_godot(sv: SchemaView, tmp_path: Path, engine: 
         "Child": {"is_a": "Base", "slot_usage": {"value": {"alias": "label", "any_of": [{"range": "string"}]}}},
         "Grandchild": {"is_a": "Child", "slot_usage": {"value": {"alias": "caption"}}},
         "ArrayBase": {"attributes": {"items": {"range": "string", "multivalued": True}}},
+        "Grid": {
+            "attributes": {
+                "boxes": {
+                    "range": "double",
+                    "array": {"dimensions": [{"minimum_cardinality": 1}, {"exact_cardinality": 4}]},
+                },
+                "flags": {"range": "boolean", "array": {"exact_number_dimensions": 2}},
+            }
+        },
         "ArrayChild": {"is_a": "ArrayBase", "slot_usage": {"items": {"alias": "labels"}}},
         "NarrowAddress": {"is_a": "Address"},
         "ObjectBase": {"attributes": {"address": {"range": "Address", "inlined": True}}},
@@ -169,6 +178,12 @@ func _initialize() -> void:
     assert(base.slot_value == "text" and child.slot_label == "text")
     base.slot_value = "other"
     assert(child.slot_caption == "other")
+    var grid = LinkMLGrid.new()
+    assert(grid.slot_boxes.is_empty() and grid.slot_flags.is_empty())
+    grid.slot_boxes.append(PackedFloat64Array([0.0, 1.5, 2.0, 3.0]))
+    grid.slot_flags.append([true, false])
+    assert(grid.slot_boxes[0][1] == 1.5 and grid.slot_boxes[0] is PackedFloat64Array)
+    assert(grid.slot_flags == [[true, false]])
     var array_child = LinkMLArrayChild.new()
     var array_base: LinkMLArrayBase = array_child
     array_child.slot_labels.append("one")

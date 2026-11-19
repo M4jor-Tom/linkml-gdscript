@@ -21,3 +21,9 @@ func linkml_scalar_types() -> Dictionary[String, String]:
         "slot_id": "String",
         "slot_name": "String",
     }
+
+
+## Inline object alternatives of union fields, in schema order.
+func linkml_union_classes() -> Dictionary[String, Array]:
+    return {
+    }

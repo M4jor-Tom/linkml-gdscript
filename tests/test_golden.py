@@ -27,6 +27,12 @@ func linkml_keys() -> Dictionary[String, String]:
 func linkml_scalar_types() -> Dictionary[String, String]:
     return {
     }
+
+
+## Inline object alternatives of union fields, in schema order.
+func linkml_union_classes() -> Dictionary[String, Array]:
+    return {
+    }
 """
 DIAGRAM = b"```mermaid\nerDiagram\nRecord {\n\n}\n\n\n\n```\n"
 

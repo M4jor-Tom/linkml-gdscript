@@ -186,6 +186,7 @@ func _initialize() -> void:
     assert(grid.slot_flags == [[true, false]])
     assert(LinkMLPerson.new().linkml_keys()["age"] == "slot_age")
     assert(LinkMLPerson.new().linkml_scalar_types()["slot_age"] == "int")
+    assert(LinkMLPerson.new().linkml_union_classes() is Dictionary)
     var keyed: LinkMLNamedThing = LinkMLPerson.new()
     assert(keyed.linkml_keys().has("age") and keyed.linkml_keys().has("id"))
     var array_child = LinkMLArrayChild.new()

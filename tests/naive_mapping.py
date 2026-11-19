@@ -42,6 +42,10 @@ def scalar_types(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str]]:
     return []
 
 
+def union_classes(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, list[str]]]:
+    return []
+
+
 def field_name(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
     return underscore(slot.name)
 

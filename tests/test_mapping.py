@@ -1517,3 +1517,28 @@ def test_scalar_types_name_primitive_storage_of_variant_fields() -> None:
     }
     source = GDScriptGenerator(sv.schema).render()["link_ml_child.gd"]
     assert "func linkml_scalar_types() -> Dictionary[String, String]:" in source
+
+
+def test_union_classes_list_inline_object_alternatives_of_variant_fields() -> None:
+    """Loaders discriminate inline object unions; scalar-only unions and plain objects are omitted."""
+    sv = schema_view(
+        classes={
+            "Row": {"attributes": {"name": {}}},
+            "Artifact": {"attributes": {"power": {"range": "integer"}}},
+            "Holder": {
+                "attributes": {
+                    "value": {"any_of": [{"range": "Row"}, {"range": "Artifact"}], "inlined": True},
+                    "tree": {"exactly_one_of": [{"range": "Row", "inlined": True}]},
+                    "either": {"any_of": [{"range": "integer"}, {"range": "string"}]},
+                    "row": {"range": "Row", "inlined": True},
+                }
+            },
+        }
+    )
+    assert dict(mapping.union_classes(sv, sv.get_class("Holder"))) == {
+        "slot_value": ["LinkMLRow", "LinkMLArtifact"],
+        "slot_tree": ["LinkMLRow"],
+    }
+    source = GDScriptGenerator(sv.schema).render()["link_ml_holder.gd"]
+    assert "func linkml_union_classes() -> Dictionary[String, Array]:" in source
+    assert '"slot_value": ["LinkMLRow", "LinkMLArtifact"],' in source

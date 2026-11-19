@@ -551,3 +551,18 @@ def scalar_types(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str]]:
         if storage in _PRIMITIVES.values() and storage != "Variant":
             fields.append((_field_name(slot), storage))
     return fields
+
+
+def union_classes(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, list[str]]]:
+    """List the inline object alternatives of union fields, so loaders can discriminate them."""
+    fields = []
+    classes = sv.all_classes()
+    for slot in sv.class_induced_slots(cls.name):
+        names = [
+            class_name(sv, sv.get_class(branch.range, strict=True))
+            for branch in _alternatives(slot)
+            if branch.range in classes and sv.is_inlined(branch) and not _is_collection(branch)
+        ]
+        if names:
+            fields.append((_field_name(slot), names))
+    return fields

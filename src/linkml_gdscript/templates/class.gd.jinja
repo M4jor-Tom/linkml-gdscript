@@ -28,3 +28,12 @@ var {{ alias_name }}: {{ type_hint }}:
     set(value):
         {{ backing_name }} = value
 {% endfor %}
+
+
+## Serialized key (alias or slot name) to field name, including inherited slots.
+func linkml_keys() -> Dictionary[String, String]:
+    return {
+{% for key, field_name in mapping.data_keys(sv, cls) %}
+        {{ mapping.string_literal(key) }}: {{ mapping.string_literal(field_name) }},
+{% endfor %}
+    }

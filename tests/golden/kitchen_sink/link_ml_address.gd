@@ -5,3 +5,11 @@ extends RefCounted
 var slot_street: Variant = null
 
 var slot_city: Variant = null
+
+
+## Serialized key (alias or slot name) to field name, including inherited slots.
+func linkml_keys() -> Dictionary[String, String]:
+    return {
+        "street": "slot_street",
+        "city": "slot_city",
+    }

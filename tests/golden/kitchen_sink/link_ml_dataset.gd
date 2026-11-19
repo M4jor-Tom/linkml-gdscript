@@ -3,3 +3,10 @@ class_name LinkMLDataset
 extends RefCounted
 
 var slot_persons: Array[LinkMLPerson] = []
+
+
+## Serialized key (alias or slot name) to field name, including inherited slots.
+func linkml_keys() -> Dictionary[String, String]:
+    return {
+        "persons": "slot_persons",
+    }

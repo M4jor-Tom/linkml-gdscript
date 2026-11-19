@@ -8,3 +8,11 @@ extends RefCounted
 var slot_id: Variant = null
 
 var slot_name: Variant = null
+
+
+## Serialized key (alias or slot name) to field name, including inherited slots.
+func linkml_keys() -> Dictionary[String, String]:
+    return {
+        "id": "slot_id",
+        "name": "slot_name",
+    }

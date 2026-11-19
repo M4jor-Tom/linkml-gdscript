@@ -3,3 +3,12 @@ class_name LinkMLPet
 extends LinkMLNamedThing
 
 var slot_species: Variant = "dog"
+
+
+## Serialized key (alias or slot name) to field name, including inherited slots.
+func linkml_keys() -> Dictionary[String, String]:
+    return {
+        "species": "slot_species",
+        "id": "slot_id",
+        "name": "slot_name",
+    }

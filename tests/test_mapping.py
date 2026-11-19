@@ -1474,3 +1474,21 @@ def test_array_alias_forwards_to_nested_storage() -> None:
     assert mapping.field_aliases(sv, sv.get_class("Child")) == [
         ("slot_grid", "slot_cells", "Array[PackedFloat64Array]")
     ]
+
+
+def test_data_keys_map_serialized_names_to_effective_fields() -> None:
+    """Loaders route JSON keys (alias or name) to fields, including inherited and fallback names."""
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"aid": {"range": "integer"}, "omega": {"alias": "Ω"}}},
+            "Child": {"is_a": "Base", "attributes": {"breaks-terrain": {"range": "boolean"}}},
+        }
+    )
+    assert dict(mapping.data_keys(sv, sv.get_class("Child"))) == {
+        "aid": "slot_aid",
+        "Ω": "slot_omega",
+        "breaks_terrain": "slot_breaks_terrain",
+    }
+    source = GDScriptGenerator(sv.schema).render()["link_ml_child.gd"]
+    assert "func linkml_keys() -> Dictionary[String, String]:" in source
+    assert '"breaks_terrain": "slot_breaks_terrain"' in source and '"Ω": "slot_omega"' in source

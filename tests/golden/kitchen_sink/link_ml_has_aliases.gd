@@ -4,3 +4,10 @@ extends RefCounted
 ## A mixin, GDScript has no multiple inheritance.
 
 var slot_aliases: Array[String] = []
+
+
+## Serialized key (alias or slot name) to field name, including inherited slots.
+func linkml_keys() -> Dictionary[String, String]:
+    return {
+        "aliases": "slot_aliases",
+    }

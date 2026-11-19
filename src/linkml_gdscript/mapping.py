@@ -535,3 +535,9 @@ def enum_member_name(sv: SchemaView, enum: EnumDefinition, value: PermissibleVal
 def file_name(gdscript_class_name: str) -> str:
     """Use snake_case script filenames."""
     return "_".join(_words(gdscript_class_name)).lower() + ".gd"
+
+
+def data_keys(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str]]:
+    """Map each serialized key (alias or name) to its effective field, for caller-written loaders."""
+    _field_symbols(sv, cls)
+    return [(slot.alias or slot.name, _field_name(slot)) for slot in sv.class_induced_slots(cls.name)]

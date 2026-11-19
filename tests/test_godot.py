@@ -184,6 +184,9 @@ func _initialize() -> void:
     grid.slot_flags.append([true, false])
     assert(grid.slot_boxes[0][1] == 1.5 and grid.slot_boxes[0] is PackedFloat64Array)
     assert(grid.slot_flags == [[true, false]])
+    assert(LinkMLPerson.new().linkml_keys()["age"] == "slot_age")
+    var keyed: LinkMLNamedThing = LinkMLPerson.new()
+    assert(keyed.linkml_keys().has("age") and keyed.linkml_keys().has("id"))
     var array_child = LinkMLArrayChild.new()
     var array_base: LinkMLArrayBase = array_child
     array_child.slot_labels.append("one")

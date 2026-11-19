@@ -34,6 +34,10 @@ def emits_extra_slots(sv: SchemaView, cls: ClassDefinition) -> bool:
     return False
 
 
+def data_keys(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str]]:
+    return [(slot.name, underscore(slot.name)) for slot in sv.class_induced_slots(cls.name)]
+
+
 def field_name(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
     return underscore(slot.name)
 

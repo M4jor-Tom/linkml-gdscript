@@ -36,3 +36,26 @@ var slot_history: Array[LinkMLEvent] = []
 var slot_lucky_charm: Variant = null
 
 var slot_aliases: Array[String] = []
+
+
+## Serialized key (alias or slot name) to field name, including inherited slots.
+func linkml_keys() -> Dictionary[String, String]:
+    return {
+        "age": "slot_age",
+        "height": "slot_height",
+        "is_player": "slot_is_player",
+        "birth_date": "slot_birth_date",
+        "last_seen": "slot_last_seen",
+        "balance": "slot_balance",
+        "luck": "slot_luck",
+        "status": "slot_status",
+        "address": "slot_address",
+        "best_friend": "slot_best_friend",
+        "friends": "slot_friends",
+        "pets": "slot_pets",
+        "history": "slot_history",
+        "lucky_charm": "slot_lucky_charm",
+        "aliases": "slot_aliases",
+        "id": "slot_id",
+        "name": "slot_name",
+    }

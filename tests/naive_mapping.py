@@ -38,6 +38,10 @@ def data_keys(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str]]:
     return [(slot.name, underscore(slot.name)) for slot in sv.class_induced_slots(cls.name)]
 
 
+def scalar_types(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str]]:
+    return []
+
+
 def field_name(sv: SchemaView, cls: ClassDefinition, slot: SlotDefinition) -> str:
     return underscore(slot.name)
 

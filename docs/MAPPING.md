@@ -199,7 +199,7 @@ and code-set metadata; external enumeration resolution is not performed.
 | `rules`, `unique_keys` | External validation |
 | `slot_usage` | Apply induced storage mapping; constraints stay external |
 | `annotations`, semantic metadata | Retained in source schema, no generated behavior |
-| JSON/YAML loading and saving | No `from_dict`, `to_dict` or custom codec; each class emits `linkml_keys()`, mapping serialized keys (alias, else underscored slot name) to effective fields, including inherited ones, for caller-written loaders |
+| JSON/YAML loading and saving | No `from_dict`, `to_dict` or custom codec; each class emits `linkml_keys()`, mapping serialized keys (alias, else underscored slot name) to effective fields, including inherited ones, and `linkml_scalar_types()`, naming the primitive (`int`, `float`, `bool`, `String`) of single-valued scalar fields, for caller-written loaders |
 | Inspector annotations/hints | No `@export` or editor behavior |
 
 ## Implementation boundaries and verification

@@ -13,3 +13,11 @@ func linkml_keys() -> Dictionary[String, String]:
         "street": "slot_street",
         "city": "slot_city",
     }
+
+
+## Primitive storage of single-valued scalar fields (they are typed Variant to keep absence).
+func linkml_scalar_types() -> Dictionary[String, String]:
+    return {
+        "slot_street": "String",
+        "slot_city": "String",
+    }

@@ -37,3 +37,12 @@ func linkml_keys() -> Dictionary[String, String]:
         {{ mapping.string_literal(key) }}: {{ mapping.string_literal(field_name) }},
 {% endfor %}
     }
+
+
+## Primitive storage of single-valued scalar fields (they are typed Variant to keep absence).
+func linkml_scalar_types() -> Dictionary[String, String]:
+    return {
+{% for field_name, type_name in mapping.scalar_types(sv, cls) %}
+        {{ mapping.string_literal(field_name) }}: {{ mapping.string_literal(type_name) }},
+{% endfor %}
+    }

@@ -541,3 +541,13 @@ def data_keys(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str]]:
     """Map each serialized key (alias or name) to its effective field, for caller-written loaders."""
     _field_symbols(sv, cls)
     return [(slot.alias or slot.name, _field_name(slot)) for slot in sv.class_induced_slots(cls.name)]
+
+
+def scalar_types(sv: SchemaView, cls: ClassDefinition) -> list[tuple[str, str]]:
+    """Name the primitive storage of single-valued Variant fields, so loaders can restore it."""
+    fields = []
+    for slot in sv.class_induced_slots(cls.name):
+        storage = _storage_type(sv, cls, slot)
+        if storage in _PRIMITIVES.values() and storage != "Variant":
+            fields.append((_field_name(slot), storage))
+    return fields

@@ -1492,3 +1492,28 @@ def test_data_keys_map_serialized_names_to_effective_fields() -> None:
     source = GDScriptGenerator(sv.schema).render()["link_ml_child.gd"]
     assert "func linkml_keys() -> Dictionary[String, String]:" in source
     assert '"breaks_terrain": "slot_breaks_terrain"' in source and '"Ω": "slot_omega"' in source
+
+
+def test_scalar_types_name_primitive_storage_of_variant_fields() -> None:
+    """Loaders restore JSON numbers to their declared primitive; unions and objects are omitted."""
+    sv = schema_view(
+        classes={
+            "Base": {"attributes": {"aid": {"range": "integer"}, "ratio": {"range": "double"}}},
+            "Child": {
+                "is_a": "Base",
+                "attributes": {
+                    "flag": {"range": "boolean"},
+                    "either": {"any_of": [{"range": "integer"}, {"range": "string"}]},
+                    "base": {"range": "Base", "inlined": True},
+                    "ids": {"range": "integer", "multivalued": True},
+                },
+            },
+        }
+    )
+    assert dict(mapping.scalar_types(sv, sv.get_class("Child"))) == {
+        "slot_aid": "int",
+        "slot_ratio": "float",
+        "slot_flag": "bool",
+    }
+    source = GDScriptGenerator(sv.schema).render()["link_ml_child.gd"]
+    assert "func linkml_scalar_types() -> Dictionary[String, String]:" in source

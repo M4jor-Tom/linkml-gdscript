@@ -21,6 +21,12 @@ extends RefCounted
 func linkml_keys() -> Dictionary[String, String]:
     return {
     }
+
+
+## Primitive storage of single-valued scalar fields (they are typed Variant to keep absence).
+func linkml_scalar_types() -> Dictionary[String, String]:
+    return {
+    }
 """
 DIAGRAM = b"```mermaid\nerDiagram\nRecord {\n\n}\n\n\n\n```\n"
 

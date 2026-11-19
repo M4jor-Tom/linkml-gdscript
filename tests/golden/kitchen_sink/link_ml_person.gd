@@ -59,3 +59,20 @@ func linkml_keys() -> Dictionary[String, String]:
         "id": "slot_id",
         "name": "slot_name",
     }
+
+
+## Primitive storage of single-valued scalar fields (they are typed Variant to keep absence).
+func linkml_scalar_types() -> Dictionary[String, String]:
+    return {
+        "slot_age": "int",
+        "slot_height": "float",
+        "slot_is_player": "bool",
+        "slot_birth_date": "String",
+        "slot_last_seen": "String",
+        "slot_balance": "String",
+        "slot_luck": "float",
+        "slot_status": "String",
+        "slot_best_friend": "String",
+        "slot_id": "String",
+        "slot_name": "String",
+    }
